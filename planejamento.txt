@@ -44,3 +44,8 @@ git branch -M main
 git remote add origin https://github.com/nick-kuh/projeto_cantina_JID.git
 git push -u origin main
 git push origin main --force (caso der algum problema, ele força o processo)
+
+quando fazer o novo commit (anteriormente pela primeira vez):
+git add .
+git commit -m "descrição do commit"
+git push origin main
