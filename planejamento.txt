@@ -35,3 +35,12 @@ senha banco de dados = databaseNick
 python ./scripts/excel.py  
 
 git init
+git add .
+-> essas duas proximas linhas é para configurar a tua conta no seu comp
+git config --global user.email "nickkuhnast@gmail.com"
+git config --global user.name "nick-kuh"
+git commit -m "fisrt commit"
+git branch -M main
+git remote add origin https://github.com/nick-kuh/projeto_cantina_JID.git
+git push -u origin main
+git push origin main --force (caso der algum problema, ele força o processo)
