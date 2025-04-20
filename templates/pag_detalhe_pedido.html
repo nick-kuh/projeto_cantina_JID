@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detalhe do Pedido - Cantina</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Montserrat', sans-serif;
+        }
+        body {
+            background: url('/static/imagens/fundo.jpg') no-repeat center center fixed;
+            background-size: cover;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .header {
+            width: 100%;
+            background-color: black;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px 30px;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+        .header img {
+            height: 80px;
+        }
+        .title {
+            font-size: 28px;
+            font-weight: 400;
+        }
+        .pedido-container {
+            background-color: #FDF3DC;
+            border-radius: 20px;
+            padding: 20px;
+            max-width: 600px;
+            width: 90%;
+            border: 5px solid black;
+            text-align: center;
+            margin-top: 100px;
+        }
+        .cliente-nome {
+            background-color: black;
+            color: white;
+            padding: 10px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 15px;
+            margin-bottom: 10px;
+        }
+        .detalhes-container {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .itens, .observacoes {
+            flex: 1;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid black;
+            min-height: 120px;
+        }
+        .item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 8px 0;
+        }
+        .controles {
+            display: flex;
+            gap: 5px;
+        }
+        .botao-controle {
+            width: 30px;
+            height: 30px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            background-color: #FFC107;
+            border: 2px solid black;
+        }
+        .botoes {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+        }
+        .botao {
+            padding: 10px 20px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: transform 0.2s ease-in-out, background-color 0.2s ease-in-out;
+            width: 45%;
+        }
+        .botao.editar {
+            background-color: #FFC107;
+            border: 3px solid black;
+        }
+        .botao.editar:hover {
+            background-color: #E0A800;
+            transform: scale(1.05);
+        }
+        .botao.salvar {
+            background-color: #FFC107;
+            color: black;
+            border: 3px solid black;
+        }
+        .botao.salvar:hover {
+            background-color: #E0A800;
+            transform: scale(1.05);
+        }
+        .botao.voltar {
+            background-color: #28A745;
+            color: white;
+            border: 3px solid black;
+        }
+        .botao.voltar:hover {
+            background-color: darkgreen;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <!-- Cabeçalho -->
+    <div class="header">
+      <img src="/static/imagens/LOGO-BRANCA-JID-2.png" alt="Logo">
+      <div class="title">Cantina JID</div>
+      <img src="/static/imagens/LOGO-BRANCA-JID-2.png" alt="Logo">
+    </div>
+  
+    <!-- Pedido -->
+    <div class="pedido-container">
+      <div class="cliente-nome">{{ pedido.cliente.nome }}</div>
+  
+      <form method="POST" action="{% url 'editar_pedido' pedido.id %}">
+        {% csrf_token %}
+        <div class="detalhes-container">
+          <div class="itens">
+            {% for item in pedido.itens.all %}
+            <div class="item" data-item-id="{{ item.id }}" data-quantidade-max="{{ item.quantidade }}">
+                <span>{{ item.produto.nome }}</span>
+                {% if modo_edicao %}
+                  <div class="controles">
+                    <button type="button" class="botao-controle" onclick="alterarQuantidade('{{ item.id }}', -1)">-</button>
+                    <span id="quantidade-{{ item.id }}">{{ item.quantidade }}</span>
+                    <button type="button" class="botao-controle" onclick="alterarQuantidade('{{ item.id }}', 1)">+</button>
+                    <!-- Input oculto com valor final -->
+                    <input type="hidden" name="quantidade_{{ item.id }}" id="input-{{ item.id }}" value="{{ item.quantidade }}">
+                  </div>
+                {% else %}
+                  <span>({{ item.quantidade }})</span>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+          <div class="observacoes">
+            {% if modo_edicao %}
+              <textarea name="observacoes" style="width:100%; height:100px;">{{ pedido.observacoes }}</textarea>
+            {% else %}
+              {{ pedido.observacoes }}
+            {% endif %}
+          </div>
+        </div>
+  
+        <div class="botoes">
+          {% if modo_edicao %}
+            <button type="submit" class="botao salvar">Salvar</button>
+          {% else %}
+            <a href="{% url 'editar_pedido' pedido.id %}" class="botao editar">Editar</a>
+          {% endif %}
+          <a href="{% url 'cozinha' %}" class="botao voltar">Voltar</a>
+        </div>
+      </form>
+    </div>
+  
+    <script>
+        function alterarQuantidade(itemId, delta) {
+          const span = document.getElementById(`quantidade-${itemId}`);
+          const input = document.getElementById(`input-${itemId}`);
+          const itemDiv = document.querySelector(`[data-item-id='${itemId}']`);
+          const quantidadeMax = parseInt(itemDiv.getAttribute('data-quantidade-max'));
+      
+          let atual = parseInt(span.innerText);
+          let novaQuantidade = atual + delta;
+      
+          if (novaQuantidade >= 0 && novaQuantidade <= quantidadeMax) {
+            span.innerText = novaQuantidade;
+            input.value = novaQuantidade;
+          }
+        }
+      </script>
+      
+  </body>
+</html>

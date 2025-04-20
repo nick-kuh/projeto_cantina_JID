@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cozinha - Cantina</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Montserrat', sans-serif;
+        }
+        body {
+            background: url('/static/imagens/fundo.jpg') no-repeat center center fixed;
+            background-size: cover;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .header {
+            width: 100%;
+            background-color: black;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px 30px;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+        .header img {
+            height: 80px;
+        }
+        .title {
+            font-size: 28px;
+            font-weight: 400;
+        }
+        .orders-container {
+            margin-top: 120px;
+            width: 95%;
+            max-width: 1000px;
+            height: 70vh;
+            overflow-y: auto;
+            padding: 10px;
+            background: rgba(255, 204, 0, 0.9);
+            border-radius: 10px;
+        }
+        .order {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+
+        .order-viagem {
+            border: 3px solid #007BFF; /* Azul vibrante */
+            box-shadow: 0 0 10px rgba(0, 123, 255, 0.5);
+            position: relative;
+        }
+
+        .order-viagem::before {
+            content: "Para Viagem";
+            position: absolute;
+            top: -10px;
+            left: 15px;
+            background-color: #007BFF;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 8px;
+        }
+
+
+        .order-name {
+            font-weight: bold;
+            font-size: 18px;
+            background: black;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 15px;
+            min-width: 120px;
+            text-align: center;
+        }
+        .order-items {
+            font-size: 16px;
+            flex-grow: 1;
+            text-align: center;
+            padding-left: 20px;
+        }
+        .order-note {
+            color: red;
+            font-weight: 600;
+            font-style: italic;
+            margin-left: 5px;
+        }
+
+        .info-button {
+            background-color: transparent;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .info-icon {
+            padding: 10px;
+            width: 55px; 
+            height: 55px;
+        }
+        .confirm-button {
+            background-color: #28A745;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: transform 0.2s, background-color 0.2s;
+        }
+        .confirm-button:hover {
+            background-color: darkgreen;
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="/static/imagens/LOGO-BRANCA-JID-2.png" alt="Logo">
+        <div class="title">Cantina JID - Cozinha</div>
+        <img src="/static/imagens/LOGO-BRANCA-JID-2.png" alt="Logo">
+    </div>  
+
+    <div class="orders-container" id="orders-container">
+        {% for pedido in pedidos %}
+            <div class="order {% if pedido.tipo_consumo == 'viagem' %}order-viagem{% endif %}">
+                <input type="hidden" name="pedido_id" value="{{ pedido.id }}">
+                <div class="order-name">{{ pedido.cliente.nome }}</div>
+                <div class="order-items">
+                    {% for item in pedido.itens.all %}
+                        {{ item.produto.nome }} ({{ item.quantidade }}) |
+                    {% endfor %}
+                    {% if pedido.observacoes %}
+                        <span class="order-note">{{ pedido.observacoes }}</span>
+                    {% endif %}
+
+                </div>
+                <div class="order-observations">
+                    
+                </div>
+                <button class="info-button" onclick="window.location.href='{{ pedido.id }}/'">
+                    <img src="/static/imagens/info.png" alt="info" class="info-icon">
+                </button>
+                <button class="confirm-button">Confirmar</button>
+            </div>
+        {% empty %}
+            <p>Nenhum pedido no momento.</p>
+        {% endfor %}
+    </div>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                document.querySelectorAll('.confirm-button').forEach(button => {
+                    button.addEventListener('click', function(event) {
+                        event.preventDefault();
+                        
+                        let pedidoDiv = this.closest('.order');
+                        let pedidoId = pedidoDiv.querySelector("input[name='pedido_id']").value;
+        
+                        fetch('/cozinha/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': getCookie('csrftoken'),
+                            },
+                            body: JSON.stringify({ pedido_id: pedidoId })
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                pedidoDiv.remove();  // Remove o pedido da tela sem recarregar
+                            } else {
+                                alert("Erro ao confirmar pedido: " + data.error);
+                            }
+                        })
+                        .catch(error => console.error("Erro na requisição:", error));
+                    });
+                });
+            });
+        
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.startsWith(name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+        </script>
+</body>
+</html>
+

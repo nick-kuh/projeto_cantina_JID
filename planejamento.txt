@@ -1,0 +1,37 @@
+- Admin
+    - Banco de dados 
+        - Colocar a quantidade de lanches e bebidas
+    - Parte Financeira 
+        - Contas dos clientes
+        - Pagamentos
+        - Fazer o excel para organizar os pagamentos dos clientes 
+- Cantina
+    - Pedidos
+        - Confirmar entrega do pedido
+        - Colocar observações (Criar uma janelinha que mostra o pedido, observações e editar caso precisar)
+        - Colocar uma borda colorida nos pedidos, se for prioridade (azul) ou levar para viagem (vermelho)
+        
+
+- Caixa
+    - Caso algum cliente queira pagar em dinheiro, é necessário confirmar o pedido.
+    - Caso o cliente queira pagar com pix, é necessário confirmar o pedido. Depois será integrado
+
+- Cliente
+    - QR Code para acessar o site
+    - Qual lanches e bebidas que irão aparecer
+    - Selecionar o que e quanto quer de lanche e bebida 
+    - Preço total 
+    - Pagamento (QR Code do pix)
+        - Caso queira pagar em dinheiro, mandar uma mensagem que irá para a cantina pagar.
+    - Confirmar
+
+user = nickjid
+senha = JIDCANTINA
+nome banco de dados = Cantina JID
+login banco de dados = postgres
+senha banco de dados = databaseNick
+.venv\Scripts\Activate 
+
+python ./scripts/excel.py  
+
+git init

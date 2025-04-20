@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cantina - Pedido</title>
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        body {
+            background: url('/static/imagens/fundo.jpg') no-repeat center center fixed;
+            background-size: cover;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .header {
+            width: 100%;
+            background-color: black;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 20px;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+
+        .header img {
+            height: 80px;
+        }
+
+        .title {
+            font-size: 28px;
+            font-weight: 400;
+        }
+
+        .content {
+            margin-top: 120px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            background: rgba(255, 204, 0, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+        }
+
+        .item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+
+        .item img {
+            width: 100px;
+            border-radius: 5px;
+        }
+
+        .price {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .quantity {
+            display: flex;
+            align-items: center;
+            background: white;
+            padding: 5px;
+            border-radius: 20px;
+            border: 2px solid black;
+            font-size: 18px;
+        }
+
+        .quantity button {
+            background-color: black;
+            color: white;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            font-size: 20px;
+            cursor: pointer;
+            transition: transform 0.2s ease-in-out, background-color 0.2s ease-in-out;
+        }
+
+        .quantity button:hover {
+            transform: scale(1.1);
+            background-color: #333;
+        }
+
+        .quantity span {
+            width: 40px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        .total {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 20px 0;
+        }
+
+        .buttons {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .btn {
+            width: 48%;
+            padding: 10px;
+            border: none;
+            border-radius: 20px;
+            background-color: black;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s ease-in-out, background-color 0.2s ease-in-out;
+        }
+
+        .btn.active {
+            background-color: green;
+        }
+
+        .send-btn {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid black;
+            border-radius: 20px;
+            background: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s ease-in-out, background-color 0.2s ease-in-out;
+        }
+
+        .send-btn:hover {
+            transform: scale(1.05);
+            background-color: #f8f8f8;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="/static/imagens/LOGO-BRANCA-JID-2.png" alt="Logo">
+        <div class="title">Cantina JID</div>
+        <img src="/static/imagens/LOGO-BRANCA-JID-2.png" alt="Logo">
+    </div>
+
+    <div class="content">
+        <h2>Bem-vindo, {{ cliente.nome }}!</h2>
+        {% for produto in lista_produtos %}
+        <div class="item" data-id="{{ produto.id }}" data-estoque="{{ produto.estoque }}" data-nome="{{ produto.nome }}">
+            <img src="{{ produto.imagem.url }}" alt="Imagem do produto">
+            <label class="price">R$ {{ produto.preco }}</label>
+            <div class="quantity">
+                <button onclick="changeQuantity('{{ produto.id }}', -1)">-</button>
+                <span id="{{ produto.id }}">0</span>
+                <button onclick="changeQuantity('{{ produto.id }}', 1)">+</button>
+            </div>
+        </div>
+        {% endfor %}
+
+        <div class="total">Total: <strong id="total">R$ 0,00</strong></div>
+
+        <form id="pedidoForm" method="POST">
+            {% csrf_token %}
+            <input type="hidden" name="cliente_id" value="{{ cliente.id }}">
+            <input type="hidden" name="pedido_json" id="pedido_json">
+            <input type="hidden" name="metodo_pagamento" id="metodo_pagamento">
+
+            <div class="buttons">
+                <button type="button" class="btn" id="btn-dinheiro" onclick="selecionarPagamento('Dinheiro')">Dinheiro</button>
+                <button type="button" class="btn" id="btn-pix" onclick="selecionarPagamento('PIX')">PIX</button>
+            </div>
+
+            <button type="button" class="send-btn" onclick="enviarPedido()">Continuar</button>
+
+        </form>
+    </div>
+
+    <script>
+        function changeQuantity(id, change) {
+            let itemElement = document.querySelector(`.item[data-id="${id}"]`);
+            let estoque = parseInt(itemElement.getAttribute('data-estoque'));
+            let nomeProduto = itemElement.getAttribute('data-nome');
+            let quantityElement = document.getElementById(id);
+            let currentValue = parseInt(quantityElement.textContent);
+
+            if (change === 1 && currentValue >= estoque) {
+                alert(`Desculpe! Não temos mais "${nomeProduto}" em estoque.`);
+                return;
+            }
+
+            if (currentValue + change >= 0) {
+                quantityElement.textContent = currentValue + change;
+            }
+
+            updateTotal();
+        }
+
+        function updateTotal() {
+            let total = 0;
+            let totalItens = 0;
+            document.querySelectorAll('.item').forEach(item => {
+                let quantity = parseInt(item.querySelector('span').textContent);
+                let price = parseFloat(item.querySelector('.price').textContent.replace('R$', '').replace(',', '.'));
+                total += quantity * price;
+                totalItens += quantity;
+            });
+            document.getElementById('total').textContent = `R$ ${total.toFixed(2).replace('.', ',')}`;
+            document.getElementById('itens').textContent = `(${totalItens} item${totalItens !== 1 ? 's' : ''})`;
+        }
+
+        function selecionarPagamento(metodo) {
+            document.getElementById("metodo_pagamento").value = metodo;
+
+            document.getElementById("btn-dinheiro").classList.remove("active");
+            document.getElementById("btn-pix").classList.remove("active");
+
+            document.getElementById(`btn-${metodo.toLowerCase()}`).classList.add("active");
+        }
+
+        document.getElementById("pedidoForm").addEventListener("submit", function(event) {
+            event.preventDefault();
+
+            let pedido = [];
+            let temEstoqueInsuficiente = false;
+
+            document.querySelectorAll(".item").forEach(item => {
+                let produto_id = item.getAttribute("data-id");
+                let quantidade = parseInt(item.querySelector("span").textContent);
+                let estoque = parseInt(item.getAttribute("data-estoque"));
+                let nomeProduto = item.getAttribute("data-nome");
+
+                if (quantidade > 0) {
+                    if (quantidade > estoque) {
+                        alert(`Quantidade de "${nomeProduto}" excede o estoque disponível (${estoque} unidade${estoque > 1 ? 's' : ''}).`);
+                        temEstoqueInsuficiente = true;
+                    } else {
+                        pedido.push({ produto_id: produto_id, quantidade: quantidade });
+                    }
+                }
+            });
+
+            if (temEstoqueInsuficiente) {
+                return;
+            }
+
+            if (pedido.length === 0) {
+                alert("Por favor, selecione pelo menos um produto.");
+                return;
+            }
+
+            let metodo_pagamento = document.getElementById("metodo_pagamento").value;
+            if (!metodo_pagamento) {
+                alert("Por favor, selecione um método de pagamento.");
+                return;
+            }
+
+            let cliente_id = document.querySelector('input[name="cliente_id"]').value;
+
+            const dadosPedido = {
+                cliente_id: cliente_id,
+                metodo_pagamento: metodo_pagamento,
+                itens: pedido
+            };
+            localStorage.setItem("pedidoData", JSON.stringify(dadosPedido));
+
+            // Redirecionar para a escolha de local
+            window.location.href = `/pedido/{{ cliente.id }}/escolher-local/`;
+        });
+
+        function enviarPedido() {
+            let pedido = [];
+            let temEstoqueInsuficiente = false;
+
+            document.querySelectorAll(".item").forEach(item => {
+                let produto_id = item.getAttribute("data-id");
+                let quantidade = parseInt(item.querySelector("span").textContent);
+                let estoque = parseInt(item.getAttribute("data-estoque"));
+                let nomeProduto = item.getAttribute("data-nome");
+
+                if (quantidade > 0) {
+                    if (quantidade > estoque) {
+                        alert(`Quantidade de "${nomeProduto}" excede o estoque disponível (${estoque} unidade${estoque > 1 ? 's' : ''}).`);
+                        temEstoqueInsuficiente = true;
+                    } else {
+                        pedido.push({ produto_id: produto_id, quantidade: quantidade });
+                    }
+                }
+            });
+
+            if (temEstoqueInsuficiente) return;
+
+            if (pedido.length === 0) {
+                alert("Por favor, selecione pelo menos um produto.");
+                return;
+            }
+
+            let metodo_pagamento = document.getElementById("metodo_pagamento").value;
+            if (!metodo_pagamento) {
+                alert("Por favor, selecione um método de pagamento.");
+                return;
+            }
+
+            let cliente_id = document.querySelector('input[name="cliente_id"]').value;
+
+            const dadosPedido = {
+                cliente_id: cliente_id,
+                metodo_pagamento: metodo_pagamento,
+                itens: pedido
+            };
+
+            const csrftoken = document.querySelector('[name=csrf-token]').content;
+
+            fetch(`/pedido/${cliente_id}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken
+                },
+                body: JSON.stringify({
+                    cliente_id: cliente_id,
+                    metodo_pagamento: metodo_pagamento,
+                    tipo_consumo: 'local',  // ou 'viagem'
+                    observacoes: "",
+                    itens: pedido
+                })
+            })
+
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === "ok") {
+                    localStorage.setItem("pedidoData", JSON.stringify(dadosPedido));
+                    window.location.href = `/pedido/${cliente_id}/escolher-local/`;
+                } else {
+                    if (Array.isArray(data.mensagens)) {
+                    alert("Erro no pedido:\n\n" + data.mensagens.join("\n"));
+                } else {
+                    alert("Erro inesperado.");
+                }
+
+                }
+            })
+            .catch(error => {
+                console.error("Erro ao validar pedido:", error);
+                alert("Erro ao validar o pedido. Tente novamente.");
+            });
+        }
+
+    </script>
+</body>
+</html>
+
