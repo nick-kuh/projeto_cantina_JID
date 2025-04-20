@@ -92,9 +92,21 @@ WSGI_APPLICATION = 'jid_cantina.wsgi.application'
 # }
 
 DATABASE_URL = os.getenv("DATABASE_URL")
+print("DATABASE_URL:", os.getenv("DATABASE_URL"))
 if DATABASE_URL:
     DATABASES = {
         'default': dj_database_url.config(default=DATABASE_URL, conn_max_age=1800)
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'CantinaJID'),
+            'USER': os.getenv('DB_USER', 'postgres'),
+            'PASSWORD': os.getenv('DB_PASSWORD', 'databaseNick'),
+            'HOST': os.getenv('DB_HOST', 'localhost'),
+            'PORT': os.getenv('DB_PORT', '5432'),
+        }
     }
 
 
