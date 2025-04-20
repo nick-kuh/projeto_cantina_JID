@@ -33,6 +33,8 @@ senha banco de dados = databaseNick
 .venv\Scripts\Activate 
 
 python ./scripts/excel.py  
+pip freeze (pega todas as bibliotecas instaladas no venv)
+pip freeze > requirements.txt () (coloca no requirements)
 
 git init
 git add .
