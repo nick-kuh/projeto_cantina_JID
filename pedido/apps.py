@@ -6,7 +6,7 @@ class PedidoConfig(AppConfig):
     name = 'pedido'
 
     def ready(self):
-        from models import Usuario
+        from .models import Usuario
         import os
 
         email = os.getenv('EMAIL_ADMIN')
