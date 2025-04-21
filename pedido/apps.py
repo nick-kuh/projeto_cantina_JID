@@ -6,4 +6,18 @@ class PedidoConfig(AppConfig):
     name = 'pedido'
 
     def ready(self):
-        import pedido.signals
+        from .models import Usuario
+        import os
+
+        email = os.getenv('EMAIL_ADMIN')
+        senha = os.getenv('SENHA_ADMIN')
+
+        usuarios = Usuario.objects.filter(email=email)
+        if not usuarios:
+            Usuario.objects.create_superuser(
+                username='nick_jid',
+                email=email,
+                password=senha,
+                is_staff=True,
+                is_active=True,
+            )

@@ -92,4 +92,4 @@ class PedidoEntregue(models.Model):
         return f"{self.cliente.nome}"
     
 class Usuario(AbstractUser):
-    pass
+    usuario = models.ManyToManyField("Pedido")
