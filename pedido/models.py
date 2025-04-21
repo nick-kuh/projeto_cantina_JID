@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import AbstractUser
 
 class Cliente(models.Model):
     nome = models.CharField(max_length=100)
@@ -89,3 +90,6 @@ class PedidoEntregue(models.Model):
 
     def __str__(self):
         return f"{self.cliente.nome}"
+    
+class Usuario(AbstractUser):
+    usuario = models.ManyToManyField("usurio") # SO para ter algo 
