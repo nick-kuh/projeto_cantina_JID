@@ -3,8 +3,10 @@ from django.views.generic import TemplateView, ListView, View
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from .models import Produto, ItemPedido, Pedido, Cliente, PedidoEntregue
-from django.utils.decorators import method_decorator
-from django.db import transaction  
+from django.http import HttpResponse
+from django.db import transaction 
+from django.contrib.admin.views.decorators import staff_member_required
+import pandas as pd 
 import json
 
 class PagInicial(TemplateView):
@@ -224,3 +226,23 @@ def editar_pedido(request, pedido_id):
         return redirect('detalhe_pedido', pedido_id=pedido.id)
 
     return render(request, 'pag_detalhe_pedido.html', {'pedido': pedido, 'modo_edicao': True})
+
+# Garante que apenas admins acessem essa view
+@staff_member_required 
+def exportar_excel_pedidos(request):
+    dados = []
+
+    for pedido in PedidoEntregue.objects.all():
+        dados.append({
+            "Cliente": pedido.cliente.nome,
+            "Itens": pedido.itens,
+            "Total": float(pedido.total),
+            "Forma de Pagamento": pedido.metodo_pagamento,
+            "Entregue em": pedido.entregue_em.strftime("%d/%m/%Y %H:%M"),
+        })
+
+    df = pd.DataFrame(dados)
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename="pedidos_exportados.xlsx"'
+    df.to_excel(response, index=False)
+    return response
