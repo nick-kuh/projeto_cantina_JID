@@ -128,6 +128,7 @@ class EscolherLocalView(View):
 
 
 class PagFinalCliente(TemplateView):
+    pedido = Pedido.objects.all()
     template_name = "pag_final_cliente.html"
 
     def get_context_data(self, **kwargs):

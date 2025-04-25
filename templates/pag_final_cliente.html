@@ -124,17 +124,19 @@
     <div class="content">
         <h2>Foi Finalizado. Vá para o Caixa confirmar</h2>
     
-        <div class="pix-section">
-            <h3>Pagamento via PIX</h3>
-            <p>Use a chave abaixo para realizar o pagamento:</p>
-    
-            <div class="pix-key-container">
-                <span id="pixKey">pix@email.com</span>
-                <button onclick="copyPixKey()" class="copy-button">Copiar</button>
+        {% if pedido.metodo_pagamento == 'PIX' %}
+            <div class="pix-section">
+                <h3>Pagamento via PIX</h3>
+                <p>Use a chave abaixo para realizar o pagamento:</p>
+
+                <div class="pix-key-container">
+                    <span id="pixKey">pix@email.com</span>
+                    <button onclick="copyPixKey()" class="copy-button">Copiar</button>
+                </div>
+
+                <p class="copy-message" id="copyMessage" style="display: none;">✅ Chave copiada!</p>
             </div>
-    
-            <p class="copy-message" id="copyMessage" style="display: none;">✅ Chave copiada!</p>
-        </div>
+        {% endif %}
     </div>
 
     <script>
