@@ -158,8 +158,96 @@
             <p>Nenhum pedido no momento.</p>
         {% endfor %}
     </div>
+    <script>
+        function atualizarPedidosCaixa() {
+            fetch('/pedidos-json/')
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('orders-container');
+                    container.innerHTML = '';
+    
+                    if (data.pedidos.length === 0) {
+                        container.innerHTML = '<p>Nenhum pedido no momento.</p>';
+                        return;
+                    }
+    
+                    data.pedidos.forEach(pedido => {
+                        const div = document.createElement('div');
+                        div.className = 'order';
+                        if (pedido.tipo_consumo === 'viagem') {
+                            div.classList.add('order-viagem');
+                        }
+    
+                        div.innerHTML = `
+                            <input type="hidden" name="pedido_id" value="${pedido.id}">
+                            <div class="order-name">${pedido.cliente}</div>
+                            <div class="order-items">
+                                ${pedido.itens}
+                                ${pedido.observacoes ? `<span class="order-note">${pedido.observacoes}</span>` : ''}
+                            </div>
+                            <div class="order-price">
+                                R$ ${pedido.total ?? '0.00'}
+                            </div>
+                            <button class="confirm-button">Confirmar</button>
+                        `;
+    
+                        container.appendChild(div);
+                    });
+    
+                    adicionarEventosConfirmarCaixa();  // Reatribui os eventos depois de atualizar
+                });
+        }
+    
+        function adicionarEventosConfirmarCaixa() {
+            document.querySelectorAll('.confirm-button').forEach(button => {
+                button.addEventListener('click', function(event) {
+                    event.preventDefault();
+    
+                    const pedidoDiv = this.closest('.order');
+                    const pedidoId = pedidoDiv.querySelector("input[name='pedido_id']").value;
+    
+                    fetch('/caixa/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken'),
+                        },
+                        body: JSON.stringify({ pedido_id: pedidoId })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            pedidoDiv.remove();  // Remove o pedido da tela
+                        } else {
+                            alert("Erro ao confirmar pedido: " + data.error);
+                        }
+                    })
+                    .catch(error => console.error("Erro na requisição:", error));
+                });
+            });
+        }
+    
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.startsWith(name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    
+        setInterval(atualizarPedidosCaixa, 2500);
+        window.onload = atualizarPedidosCaixa;
+    </script>
+    
 
-        <script>
+        <!-- <script>
             document.addEventListener('DOMContentLoaded', function() {
                 document.querySelectorAll('.confirm-button').forEach(button => {
                     button.addEventListener('click', function(event) {
@@ -202,7 +290,7 @@
                     }
                 }
                 return cookieValue;
-            }
+            } -->
         </script>
 </body>
 </html>

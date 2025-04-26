@@ -163,8 +163,93 @@
             <p>Nenhum pedido no momento.</p>
         {% endfor %}
     </div>
+    <script>
+        function atualizarPedidos() {
+            fetch('/pedidos-json/')
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('orders-container');
+                    container.innerHTML = '';
 
-        <script>
+                    if (data.pedidos.length === 0) {
+                        container.innerHTML = '<p>Nenhum pedido no momento.</p>';
+                        return;
+                    }
+
+                    data.pedidos.forEach(pedido => {
+                        const div = document.createElement('div');
+                        div.className = 'order';
+                        if (pedido.tipo_consumo === 'viagem') {
+                            div.classList.add('order-viagem');
+                        }
+
+                        div.innerHTML = `
+                            <input type="hidden" name="pedido_id" value="${pedido.id}">
+                            <div class="order-name">${pedido.cliente}</div>
+                            <div class="order-items">
+                                ${pedido.itens}
+                                ${pedido.observacoes ? `<span class="order-note">${pedido.observacoes}</span>` : ''}
+                            </div>
+                            <div class="order-observations"></div>
+                            <button class="info-button" onclick="window.location.href='${pedido.id}/'">
+                                <img src="/static/imagens/info.png" alt="info" class="info-icon">
+                            </button>
+                            <button class="confirm-button">Confirmar</button>
+                        `;
+
+                        container.appendChild(div);
+                    });
+
+                    adicionarEventosConfirmar();  // Reatribui os eventos
+                });
+        }
+
+        function adicionarEventosConfirmar() {
+            document.querySelectorAll('.confirm-button').forEach(button => {
+                button.addEventListener('click', function(event) {
+                    event.preventDefault();
+                    const pedidoDiv = this.closest('.order');
+                    const pedidoId = pedidoDiv.querySelector("input[name='pedido_id']").value;
+
+                    fetch('/cozinha/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken'),
+                        },
+                        body: JSON.stringify({ pedido_id: pedidoId })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            pedidoDiv.remove();
+                        } else {
+                            alert("Erro ao confirmar pedido: " + data.error);
+                        }
+                    });
+                });
+            });
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.startsWith(name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        setInterval(atualizarPedidos, 2500);
+        window.onload = atualizarPedidos;
+    </script>
+        <!-- <script>
             document.addEventListener('DOMContentLoaded', function() {
                 document.querySelectorAll('.confirm-button').forEach(button => {
                     button.addEventListener('click', function(event) {
@@ -207,7 +292,7 @@
                     }
                 }
                 return cookieValue;
-            }
+            } -->
         </script>
 </body>
 </html>

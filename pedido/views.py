@@ -250,3 +250,22 @@ def exportar_excel_pedidos(request):
     response['Content-Disposition'] = 'attachment; filename="pedidos_exportados.xlsx"'
     df.to_excel(response, index=False)
     return response
+
+
+@staff_member_required
+def pedidos_json(request):
+    pedidos = Pedido.objects.filter(status='pendente').order_by('data_criacao')
+    data = []
+
+    for pedido in pedidos:
+        itens = ' | '.join([f"{item.produto.nome} ({item.quantidade})" for item in pedido.itens.all()])
+        data.append({
+            'id': pedido.id,
+            'cliente': pedido.cliente.nome,
+            'itens': itens,
+            'observacoes': pedido.observacoes,
+            'tipo_consumo': pedido.tipo_consumo,
+            'total': float(pedido.total) if pedido.total else 0.00,
+        })
+
+    return JsonResponse({'pedidos': data})
