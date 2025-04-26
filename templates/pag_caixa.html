@@ -143,11 +143,9 @@
                 <div class="order-name">{{ pedido.cliente.nome }}</div>
                 <div class="order-items">
                     {% for item in pedido.itens.all %}
-                        {{ item.produto.nome }} ({{ item.quantidade }}) |
+                        {{ item.produto.nome }} ({{ item.quantidade }}) | {{ pedido.metodo_pagamento }}
                     {% endfor %}
-                    {% if pedido.observacoes %}
-                        <span class="order-note">{{ pedido.observacoes }}</span>
-                    {% endif %}
+                    <span class="order-note">{{ pedido.metodo_pagamento }}</span>
                 </div>
                 <div class="order-price">
                     R$ {{ pedido.total }}
@@ -160,7 +158,7 @@
     </div>
     <script>
         function atualizarPedidosCaixa() {
-            fetch('/pedidos-json/')
+            fetch('/pedidos-caixa-json/')
                 .then(response => response.json())
                 .then(data => {
                     const container = document.getElementById('orders-container');
@@ -183,7 +181,7 @@
                             <div class="order-name">${pedido.cliente}</div>
                             <div class="order-items">
                                 ${pedido.itens}
-                                ${pedido.observacoes ? `<span class="order-note">${pedido.observacoes}</span>` : ''}
+                                ${pedido.metodo_pagamento ? `<span class="order-note">${pedido.metodo_pagamento}</span>` : ''}
                             </div>
                             <div class="order-price">
                                 R$ ${pedido.total ?? '0.00'}

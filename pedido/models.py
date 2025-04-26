@@ -34,6 +34,7 @@ class Pedido(models.Model):
     tipo_consumo = models.CharField(max_length=10, choices=TIPO_CONSUMO, default='local')
     observacoes = models.TextField(blank=True, null=True)  # Observações do cliente
     liberado_para_cozinha = models.BooleanField(default=False)
+    liberado_para_caixa = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.cliente}"

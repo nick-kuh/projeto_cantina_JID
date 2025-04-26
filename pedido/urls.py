@@ -1,6 +1,5 @@
 from django.urls import path, include
-from .views import PagInicial, PagCliente, EscolherLocalView ,PagFinalCliente, salvar_nome, CozinhaView, CaixaView,detalhe_pedido, editar_pedido, exportar_excel_pedidos, pedidos_json
-
+from .views import PagInicial, PagCliente, EscolherLocalView ,PagFinalCliente, salvar_nome, CozinhaView, CaixaView,detalhe_pedido, editar_pedido, exportar_excel_pedidos, pedidos_json, pedidos_caixa_json
 urlpatterns = [
     path('', PagInicial.as_view()),
     path('salvar_nome/', salvar_nome, name='salvar_nome'),
@@ -13,4 +12,5 @@ urlpatterns = [
     path('cozinha/<int:pedido_id>/editar/', editar_pedido, name='editar_pedido'),
     path('excel/', exportar_excel_pedidos, name='exportar_excel'),
     path('pedidos-json/', pedidos_json, name='pedidos_json'),
+    path('pedidos-caixa-json/', pedidos_caixa_json, name='pedidos_caixa_json'),
 ] 

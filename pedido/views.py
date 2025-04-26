@@ -125,6 +125,7 @@ class EscolherLocalView(View):
 
         pedido.tipo_consumo = tipo_consumo
         pedido.observacoes = observacoes  # <- aqui!
+        pedido.liberado_para_caixa = True
         pedido.save()
 
         return JsonResponse({"mensagem": "Tipo de consumo salvo com sucesso", "pedido_id": pedido.id})
@@ -173,7 +174,7 @@ class CozinhaView(View):
 @method_decorator(staff_member_required, name='dispatch')
 class CaixaView(View):
     def get(self, request):
-        pedidos = Pedido.objects.filter(liberado_para_cozinha=False)
+        pedidos = Pedido.objects.filter(liberado_para_cozinha=False, liberado_para_caixa=True)  # Só pedidos liberados para caixa
         return render(request, 'pag_caixa.html', {'pedidos': pedidos})
 
     def post(self, request):
@@ -254,18 +255,38 @@ def exportar_excel_pedidos(request):
 
 @staff_member_required
 def pedidos_json(request):
-    pedidos = Pedido.objects.filter(status='pendente').order_by('data_criacao')
-    data = []
+    pedidos = Pedido.objects.filter(liberado_para_cozinha=True).order_by('-id').reverse()
 
+    lista = []
     for pedido in pedidos:
-        itens = ' | '.join([f"{item.produto.nome} ({item.quantidade})" for item in pedido.itens.all()])
-        data.append({
+        itens = [f"{item.produto.nome} ({item.quantidade})" for item in pedido.itens.all()]
+        lista.append({
             'id': pedido.id,
             'cliente': pedido.cliente.nome,
-            'itens': itens,
+            'itens': ' | '.join(itens),
             'observacoes': pedido.observacoes,
             'tipo_consumo': pedido.tipo_consumo,
-            'total': float(pedido.total) if pedido.total else 0.00,
         })
 
-    return JsonResponse({'pedidos': data})
+    return JsonResponse({'pedidos': lista})
+
+@staff_member_required
+def pedidos_caixa_json(request):
+    pedidos = Pedido.objects.filter(liberado_para_cozinha=False, liberado_para_caixa=True).order_by('-id').reverse()
+
+    lista = []
+    for pedido in pedidos:
+        itens = [f"{item.produto.nome} ({item.quantidade})" for item in pedido.itens.all()]
+        lista.append({
+            'id': pedido.id,
+            'cliente': pedido.cliente.nome,
+            'itens': ' | '.join(itens),
+            'metodo_pagamento':pedido.metodo_pagamento,
+            'tipo_consumo': pedido.tipo_consumo,
+            'total': f"{pedido.total:.2f}".replace('.', ',') if pedido.total else "0,00",
+        })
+
+    return JsonResponse({'pedidos': lista})
+
+
+
