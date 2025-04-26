@@ -6,6 +6,7 @@ from .models import Produto, ItemPedido, Pedido, Cliente, PedidoEntregue
 from django.http import HttpResponse
 from django.db import transaction 
 from django.contrib.admin.views.decorators import staff_member_required
+from django.utils.decorators import method_decorator
 import pandas as pd 
 import json
 
@@ -139,7 +140,7 @@ class PagFinalCliente(TemplateView):
         context["pedido"] = get_object_or_404(Pedido, id=pedido_id)
         return context
 
-# @staff_member_required 
+@method_decorator(staff_member_required, name='dispatch')
 class CozinhaView(View):
     def get(self, request):
         pedidos = Pedido.objects.filter(liberado_para_cozinha=True)  # Só pedidos liberados
@@ -169,7 +170,7 @@ class CozinhaView(View):
             return JsonResponse({'success': False, 'error': str(e)})
         
 
-# @staff_member_required 
+@method_decorator(staff_member_required, name='dispatch')
 class CaixaView(View):
     def get(self, request):
         pedidos = Pedido.objects.filter(liberado_para_cozinha=False)
