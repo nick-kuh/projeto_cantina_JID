@@ -11,5 +11,5 @@ urlpatterns = [
     path('cozinha/', CozinhaView.as_view(), name='cozinha'),
     path('cozinha/<int:pedido_id>/', detalhe_pedido, name='detalhe_pedido'),
     path('cozinha/<int:pedido_id>/editar/', editar_pedido, name='editar_pedido'),
-    path('exportar_excel/', exportar_excel_pedidos, name='exportar_excel'),
+    path('excel/', exportar_excel_pedidos, name='exportar_excel'),
 ] 

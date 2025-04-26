@@ -52,12 +52,11 @@ git add .
 git commit -m "descrição do commit"
 git push origin main
 
-Arrumar o texto para pix (mostrar o comprovante)
+
 Tentar restringir a pagina caixa e cozinha (parecido com o esquema de excel)
-Mudar o nome do excel (deixar mais simples)
 Ver documentos no github se vale a pena apagar, tipo planejamento txt (ver como tirar o planejamento txt do add .)
 Apagar o outro projeto do railway 
 
 
-cantina
+jid
 CANTINAIDMOOCA
