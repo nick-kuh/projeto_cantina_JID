@@ -174,3 +174,4 @@ cython_debug/
 .pypirc
 
 planejamento.txt
+db.sqlite3
