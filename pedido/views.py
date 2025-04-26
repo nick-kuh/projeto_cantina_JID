@@ -139,7 +139,7 @@ class PagFinalCliente(TemplateView):
         context["pedido"] = get_object_or_404(Pedido, id=pedido_id)
         return context
 
-@staff_member_required 
+# @staff_member_required 
 class CozinhaView(View):
     def get(self, request):
         pedidos = Pedido.objects.filter(liberado_para_cozinha=True)  # Só pedidos liberados
@@ -169,7 +169,7 @@ class CozinhaView(View):
             return JsonResponse({'success': False, 'error': str(e)})
         
 
-@staff_member_required 
+# @staff_member_required 
 class CaixaView(View):
     def get(self, request):
         pedidos = Pedido.objects.filter(liberado_para_cozinha=False)
