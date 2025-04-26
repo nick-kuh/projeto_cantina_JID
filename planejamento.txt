@@ -1,0 +1,62 @@
+- Admin
+    - Banco de dados 
+        - Colocar a quantidade de lanches e bebidas
+    - Parte Financeira 
+        - Contas dos clientes
+        - Pagamentos
+        - Fazer o excel para organizar os pagamentos dos clientes 
+- Cantina
+    - Pedidos
+        - Confirmar entrega do pedido
+        - Colocar observações (Criar uma janelinha que mostra o pedido, observações e editar caso precisar)
+        - Colocar uma borda colorida nos pedidos, se for prioridade (azul) ou levar para viagem (vermelho)
+        
+
+- Caixa
+    - Caso algum cliente queira pagar em dinheiro, é necessário confirmar o pedido.
+    - Caso o cliente queira pagar com pix, é necessário confirmar o pedido. Depois será integrado
+
+- Cliente
+    - QR Code para acessar o site
+    - Qual lanches e bebidas que irão aparecer
+    - Selecionar o que e quanto quer de lanche e bebida 
+    - Preço total 
+    - Pagamento (QR Code do pix)
+        - Caso queira pagar em dinheiro, mandar uma mensagem que irá para a cantina pagar.
+    - Confirmar
+
+user = nickjid
+senha = JIDCANTINA
+nome banco de dados = Cantina JID
+login banco de dados = postgres
+senha banco de dados = databaseNick
+.venv\Scripts\Activate 
+
+python ./scripts/excel.py  
+pip freeze (pega todas as bibliotecas instaladas no venv)
+pip freeze > requirements.txt () (coloca no requirements)
+
+git init
+git add .
+-> essas duas proximas linhas é para configurar a tua conta no seu comp
+git config --global user.email "nickkuhnast@gmail.com"
+git config --global user.name "nick-kuh"
+git commit -m "fisrt commit"
+git branch -M main
+git remote add origin https://github.com/nick-kuh/projeto_cantina_JID.git
+git push -u origin main
+git push origin main --force (caso der algum problema, ele força o processo)
+
+quando fazer o novo commit (anteriormente pela primeira vez):
+git add .
+git commit -m "descrição do commit"
+git push origin main
+
+
+Tentar restringir a pagina caixa e cozinha (parecido com o esquema de excel)
+Ver documentos no github se vale a pena apagar, tipo planejamento txt (ver como tirar o planejamento txt do add .)
+Apagar o outro projeto do railway 
+
+
+jid
+CANTINAIDMOOCA
