@@ -246,11 +246,12 @@
             });
 
             function refazerPedido() {
-                window.location.href = `/`; // ou outra rota desejada
+                window.location.href = `/`; // vai para inicio
             }
 
             function fecharMensagem() {
-                document.getElementById("modalErro").style.display = "none";
+                window.location.href = `/pedido/${data.pedido_id}/final/`; // vai para final
+                // document.getElementById("modalErro").style.display = "none";
             }
 
         </script>
