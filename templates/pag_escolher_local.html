@@ -190,6 +190,7 @@
                     <h2>Erro ao validar o pedido</h2>
                     <p>Parece que o pedido já foi finalizado ou não existe.</p>
                     <button onclick="refazerPedido()">Fazer novo pedido</button>
+                    <button onclick="fecharMensagem()">Fechar a mensagem</button>
                 </div>
             </div>
         </div>
@@ -246,6 +247,10 @@
 
             function refazerPedido() {
                 window.location.href = `/`; // ou outra rota desejada
+            }
+
+            function fecharMensagem() {
+                document.getElementById("modalErro").style.display = "none";
             }
 
         </script>
