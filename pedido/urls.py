@@ -4,7 +4,7 @@ urlpatterns = [
     path('', PagInicial.as_view()),
     path('salvar_nome/', salvar_nome, name='salvar_nome'),
     path("pedido/<int:cliente_id>/", PagCliente.as_view(), name="pag_cliente"),
-    path("pedido/<int:cliente_id>/escolher-local/", EscolherLocalView.as_view(), name="escolher_local"),
+    path("pedido/<int:cliente_id>/escolher-local/", EscolherLocalView.as_view(), name="pag_escolher_local"),
     path('pedido/<int:pedido_id>/final/', PagFinalCliente.as_view(), name='pag_final_cliente'),
     path('caixa/', CaixaView.as_view(), name='caixa'),
     path('cozinha/', CozinhaView.as_view(), name='cozinha'),

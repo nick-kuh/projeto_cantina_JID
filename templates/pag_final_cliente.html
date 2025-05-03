@@ -59,6 +59,40 @@
             border: 2px solid black;
         }
 
+        .order-summary {
+            background-color: #fff;
+            border: 1px solid #ccc;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+            text-align: left;
+        }
+
+        .order-summary h3 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .order-summary p {
+            font-size: 25px;
+            margin-bottom: 15px;
+            color: red;
+        }
+
+        .order-items {
+            list-style: none;
+            padding-left: 0;
+            margin: 0;
+        }
+
+        .order-items li {
+            padding: 6px 0;
+            border-bottom: 1px solid #edae1d;
+            font-size: 16px;
+        }
+
         .pix-section {
             margin-top: 20px;
             background-color: black;
@@ -122,8 +156,21 @@
             Vá para o Caixa confirmar</h2>
     </div> -->
     <div class="content">    
+
+        <div class="order-summary">
+            <p><strong>Valor Total:</strong> R$ {{ pedido.total|floatformat:2 }}</p>
+
+            <h3>Itens:</h3>
+            <ul class="order-items">
+                {% for item in pedido.itens.all %}
+                    <li>{{ item.quantidade }}x {{ item.produto }}</li>
+                {% empty %}
+                    <li>Nenhum item no pedido.</li>
+                {% endfor %}
+            </ul>
+        </div>
         {% if pedido.metodo_pagamento == 'PIX' %}
-        <h2>Cola no caixa com o print do Pix e tá feito ✅</h2>
+        <h2>Mostra o comprovante do Pix no caixa e tá tudo certo ✅</h2>
             <div class="pix-section">
                 <h3>Pagamento via PIX</h3>
                 <p>Manda ver no Pix com essa chave aqui 👇</p>
@@ -137,7 +184,7 @@
                 <p class="copy-message" id="copyMessage" style="display: none;">✅ Chave copiada!</p>
             </div>
         {% else %}
-            <h2>Fechou o pedido! Agora cola lá no caixa pra pagar 😎</h2>
+            <h2>Tudo certo com o pedido! Agora é só pagar no caixa 😎</h2>
         {% endif %}
     </div>
 

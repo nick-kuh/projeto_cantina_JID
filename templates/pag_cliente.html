@@ -207,6 +207,47 @@
             background-color: #f8f8f8;
         }
 
+        .modal {
+            display: none; /* Escondido por padrão */
+            position: fixed;
+            z-index: 999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background-color: #fff;
+            margin: auto;
+            padding: 20px 40px;
+            border-radius: 15px;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0px 0px 10px rgba(0,0,0,0.3);
+        }
+
+        .modal-content h2 {
+            margin-bottom: 10px;
+            color: red;
+        }
+
+        .modal-content button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            border: none;
+            background-color: black;
+            color: white;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+
     </style>
 </head>
 <body>
@@ -251,8 +292,17 @@
             </div>
 
             <button type="button" class="send-btn" onclick="enviarPedido()">Continuar</button>
-
         </form>
+
+        <div id="modalErro" class="modal">
+            <div class="modal-content">
+                <h2>Erro ao validar o pedido</h2>
+                <p>Parece que o pedido já foi finalizado ou deu erro.</p>
+                <button onclick="refazerPedido()">Fazer novo pedido</button>
+                <button onclick="fecharMensagem()">Fechar a mensagem</button>
+            </div>
+        </div>
+
     </div>
 
     <script>
@@ -420,9 +470,18 @@
                 }
             })
             .catch(error => {
-                console.error("Erro ao validar pedido:", error);
-                alert("Erro ao validar o pedido. Tente novamente.");
+                console.error("Erro ao validar pedido: ", error);
+                // alert("Erro ao validar o pedido. Tente novamente. Parece que o pedido já foi finalizado ou não existe.");
+                document.getElementById("modalErro").style.display = "flex";
             });
+        }
+
+        function refazerPedido() {
+            window.location.href = `/`; // ou outra rota desejada
+        }
+
+        function fecharMensagem() {
+            document.getElementById("modalErro").style.display = "none";
         }
 
     </script>

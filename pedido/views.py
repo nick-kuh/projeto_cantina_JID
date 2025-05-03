@@ -9,6 +9,9 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.utils.decorators import method_decorator
 import pandas as pd 
 import json
+from django.db.models import Case, When, Value, IntegerField
+from django.utils import timezone
+
 
 class PagInicial(TemplateView):
     template_name = "pag_inicial.html"
@@ -44,6 +47,17 @@ class PagCliente(ListView):
 
         return context
 
+    def dispatch(self, request, *args, **kwargs):
+        cliente_id = self.kwargs.get('cliente_id')
+        cliente = get_object_or_404(Cliente, id=cliente_id)
+
+        pedido_existente = Pedido.objects.filter(cliente=cliente).last()
+
+        if pedido_existente and pedido_existente.liberado_para_caixa:
+            print("entrou")
+            return redirect('pag_final_cliente', pedido_id=pedido_existente.id)
+
+        return super().dispatch(request, *args, **kwargs)
  
     def post(self, request, cliente_id):
         try:
@@ -109,6 +123,18 @@ class EscolherLocalView(View):
 
     def get(self, request, cliente_id):
         return render(request, self.template_name, {"cliente_id": cliente_id})
+    
+    def dispatch(self, request, *args, **kwargs):
+        cliente_id = self.kwargs.get('cliente_id')
+        cliente = get_object_or_404(Cliente, id=cliente_id)
+
+        pedido_existente = Pedido.objects.filter(cliente=cliente).last()
+
+        if pedido_existente and pedido_existente.liberado_para_caixa:
+            print("entrou")
+            return redirect('pag_final_cliente', pedido_id=pedido_existente.id)
+
+        return super().dispatch(request, *args, **kwargs)
 
     def post(self, request, cliente_id):
         tipo_consumo = request.POST.get("tipo_consumo", "").lower()
@@ -124,12 +150,11 @@ class EscolherLocalView(View):
             return JsonResponse({"erro": "Nenhum pedido aberto encontrado"}, status=404)
 
         pedido.tipo_consumo = tipo_consumo
-        pedido.observacoes = observacoes  # <- aqui!
+        pedido.observacoes = observacoes
         pedido.liberado_para_caixa = True
         pedido.save()
 
         return JsonResponse({"mensagem": "Tipo de consumo salvo com sucesso", "pedido_id": pedido.id})
-
 
 class PagFinalCliente(TemplateView):
     pedido = Pedido.objects.all()
@@ -144,7 +169,16 @@ class PagFinalCliente(TemplateView):
 @method_decorator(staff_member_required, name='dispatch')
 class CozinhaView(View):
     def get(self, request):
-        pedidos = Pedido.objects.filter(liberado_para_cozinha=True)  # Só pedidos liberados
+        pedidos = Pedido.objects.filter(liberado_para_cozinha=True).order_by( # Só pedidos liberados e ordenados
+        # Primeiro por tipo de consumo: viagem antes de local
+            Case(
+                When(tipo_consumo='viagem', then=Value(0)),
+                When(tipo_consumo='local', then=Value(1)),
+                default=Value(2),
+                output_field=IntegerField(),
+            ),
+            'time_liberado_para_cozinha'  # depois por ordem de liberação  
+        )
         return render(request, 'pag_cozinha.html', {'pedidos': pedidos})
 
     def post(self, request):
@@ -188,6 +222,7 @@ class CaixaView(View):
             pedido = get_object_or_404(Pedido, id=pedido_id)
 
             pedido.liberado_para_cozinha = True
+            pedido.time_liberado_para_cozinha = timezone.now()
             pedido.save()
 
             return JsonResponse({'success': True})
@@ -255,7 +290,15 @@ def exportar_excel_pedidos(request):
 
 @staff_member_required
 def pedidos_json(request):
-    pedidos = Pedido.objects.filter(liberado_para_cozinha=True).order_by('-id').reverse()
+    pedidos = Pedido.objects.filter(liberado_para_cozinha=True).order_by(
+        Case(
+            When(tipo_consumo='viagem', then=Value(0)),
+            When(tipo_consumo='local', then=Value(1)),
+            default=Value(2),
+            output_field=IntegerField(),
+        ),
+        'time_liberado_para_cozinha'
+    )
 
     lista = []
     for pedido in pedidos:
@@ -269,6 +312,21 @@ def pedidos_json(request):
         })
 
     return JsonResponse({'pedidos': lista})
+# def pedidos_json(request):
+#     pedidos = Pedido.objects.filter(liberado_para_cozinha=True).order_by('-id').reverse()
+
+#     lista = []
+#     for pedido in pedidos:
+#         itens = [f"{item.produto.nome} ({item.quantidade})" for item in pedido.itens.all()]
+#         lista.append({
+#             'id': pedido.id,
+#             'cliente': pedido.cliente.nome,
+#             'itens': ' | '.join(itens),
+#             'observacoes': pedido.observacoes,
+#             'tipo_consumo': pedido.tipo_consumo,
+#         })
+
+#     return JsonResponse({'pedidos': lista})
 
 @staff_member_required
 def pedidos_caixa_json(request):
