@@ -113,6 +113,19 @@
             text-align: center;
         }
 
+        .btn-cancelar {
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .btn-cancelar:hover {
+            background-color: #c0392b;
+        }
+
         .confirm-button {
             background-color: #28A745;
             color: white;
@@ -150,6 +163,7 @@
                 <div class="order-price">
                     R$ {{ pedido.total }}
                 </div>
+                <button class="btn-cancelar" onclick="cancelarPedido('{{ pedido.id }}')">Cancelar</button>
                 <button class="confirm-button">Confirmar</button>
             </div>
         {% empty %}
@@ -242,54 +256,45 @@
     
         setInterval(atualizarPedidosCaixa, 2500);
         window.onload = atualizarPedidosCaixa;
-    </script>
-    
 
-        <!-- <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                document.querySelectorAll('.confirm-button').forEach(button => {
-                    button.addEventListener('click', function(event) {
-                        event.preventDefault();
-                        
-                        let pedidoDiv = this.closest('.order');
-                        let pedidoId = pedidoDiv.querySelector("input[name='pedido_id']").value;
-        
-                        fetch('/caixa/', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': getCookie('csrftoken'),
-                            },
-                            body: JSON.stringify({ pedido_id: pedidoId })
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                pedidoDiv.remove();  // Remove o pedido da tela sem recarregar
-                            } else {
-                                alert("Erro ao confirmar pedido: " + data.error);
-                            }
-                        })
-                        .catch(error => console.error("Erro na requisição:", error));
-                    });
-                });
-            });
-        
-            function getCookie(name) {
-                let cookieValue = null;
-                if (document.cookie && document.cookie !== '') {
-                    const cookies = document.cookie.split(';');
-                    for (let i = 0; i < cookies.length; i++) {
-                        const cookie = cookies[i].trim();
-                        if (cookie.startsWith(name + '=')) {
-                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                            break;
-                        }
-                    }
-                }
-                return cookieValue;
-            } -->
-        </script>
+        // function cancelarPedido(pedidoId) {
+        //     if (confirm("Tem certeza que deseja cancelar este pedido?")) {
+        //         fetch("/cancelar_pedido/", {
+        //             method: "POST",
+        //             headers: {
+        //                 "Content-Type": "application/json",
+        //                 "X-CSRFToken": getCookie('csrftoken')
+        //             },
+        //             body: JSON.stringify({ pedido_id: pedidoId })
+        //         })
+        //         .then(response => response.json())
+        //         .then(data => {
+        //             if (data.success) {
+        //                 alert("Pedido cancelado com sucesso.");
+        //                 location.reload();
+        //             } else {
+        //                 alert("Erro ao cancelar: " + data.error);
+        //             }
+        //         });
+        //     }
+        // }
+
+        // // função auxiliar para CSRF
+        // function getCookie(name) {
+        //     let cookieValue = null;
+        //     if (document.cookie && document.cookie !== '') {
+        //         let cookies = document.cookie.split(';');
+        //         for (let i = 0; i < cookies.length; i++) {
+        //             let cookie = cookies[i].trim();
+        //             if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        //                 cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        //                 break;
+        //             }
+        //         }
+        //     }
+        //     return cookieValue;
+        // }
+    </script>
 </body>
 </html>
 

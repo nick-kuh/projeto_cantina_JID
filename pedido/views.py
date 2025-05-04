@@ -2,7 +2,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.views.generic import TemplateView, ListView, View
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from .models import Produto, ItemPedido, Pedido, Cliente, PedidoEntregue
+from .models import Produto, ItemPedido, Pedido, Cliente, PedidoEntregue, PedidoCancelado
 from django.http import HttpResponse
 from django.db import transaction 
 from django.contrib.admin.views.decorators import staff_member_required
@@ -345,6 +345,3 @@ def pedidos_caixa_json(request):
         })
 
     return JsonResponse({'pedidos': lista})
-
-
-

@@ -13,4 +13,5 @@ urlpatterns = [
     path('excel/', exportar_excel_pedidos, name='exportar_excel'),
     path('pedidos-json/', pedidos_json, name='pedidos_json'),
     path('pedidos-caixa-json/', pedidos_caixa_json, name='pedidos_caixa_json'),
+    # path("cancelar_pedido/", cancelar_pedido, name="cancelar_pedido"),
 ] 

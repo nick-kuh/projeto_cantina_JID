@@ -232,8 +232,13 @@
                 })
                 .then(response => response.json())
                 .then(data => {
+                    // console.log("Pedido ID:", data.pedido_id);
+
+                    // Salva temporariamente no localStorage
+                    localStorage.setItem("pedidoID", data.pedido_id);
+
                     if (data.pedido_id) {
-                        // localStorage.removeItem("pedidoData");
+                        localStorage.removeItem("pedidoData");
                         window.location.href = `/pedido/${data.pedido_id}/final/`;
                     } else {
                         alert("Erro ao salvar tipo de consumo.");
@@ -250,8 +255,14 @@
             }
 
             function fecharMensagem() {
-                print("/pedido/{data.pedido_id}/final/")
-                window.location.href = `/pedido/${data.pedido_id}/final/`; // vai para final
+                const pedidoID = localStorage.getItem("pedidoID");
+
+                if (pedidoID) {
+                    window.location.href = `/pedido/${pedidoID}/final/`;
+                } else {
+                    alert("Não foi possível recuperar o ID do pedido.");
+                }
+                // window.location.href = `/pedido/${data.pedido_id}/final/`; // vai para final
                 // document.getElementById("modalErro").style.display = "none";
             }
 

@@ -481,7 +481,13 @@
         }
 
         function fecharMensagem() {
-            window.location.href = `/pedido/${data.pedido_id}/final/`; // vai para final
+            const pedidoID = localStorage.getItem("pedidoID");
+
+            if (pedidoID) {
+                window.location.href = `/pedido/${pedidoID}/final/`;
+            } else {
+                alert("Não foi possível recuperar o ID do pedido.");
+            }
             // document.getElementById("modalErro").style.display = "none";
         }
 
