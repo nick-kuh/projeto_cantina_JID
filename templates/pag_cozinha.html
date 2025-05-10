@@ -114,19 +114,52 @@
             width: 55px; 
             height: 55px;
         }
+        button img {
+            display: block;
+            margin: auto;
+        }
+        .btn-cancelar {
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            padding: 6px;
+            margin: 5px;
+            border-radius: 10px;
+            cursor: pointer;
+            /* font-size: 16px; */
+            transition: transform 0.2s, background-color 0.2s;
+        }
+        .btn-cancelar:hover{
+            background-color: rgb(100, 0, 0);
+            transform: scale(1.1);
+        }
+
+        .cancel-icon {
+            /* padding: 10px; */
+            width: 25px; 
+            height: 25px;
+            object-fit: contain;
+        }
         .confirm-button {
             background-color: #28A745;
             color: white;
             border: none;
-            padding: 10px 15px;
+            padding: 5px;
+            margin: 5px;
             border-radius: 10px;
             cursor: pointer;
-            font-size: 16px;
+            /* font-size: 16px; */
             transition: transform 0.2s, background-color 0.2s;
         }
         .confirm-button:hover {
             background-color: darkgreen;
             transform: scale(1.1);
+        }
+        .confirm-icon {
+            /* padding: 10px; */
+            width: 29px; 
+            height: 29px;
+            object-fit: contain;
         }
     </style>
 </head>
@@ -157,7 +190,12 @@
                 <button class="info-button" onclick="window.location.href='{{ pedido.id }}/'">
                     <img src="/static/imagens/info.png" alt="info" class="info-icon">
                 </button>
-                <button class="confirm-button">Confirmar</button>
+                <button class="btn-cancelar" onclick="cancelarPedido('{{ pedido.id }}')">
+                    <img src="/static/imagens/remove.png" alt="cancelar" class="cancel-icon">
+                </button>
+                <button class="confirm-button">
+                    <img src="/static/imagens/check-box (1).png" alt="confirmar" class="confirm-icon">
+                </button>
             </div>
         {% empty %}
             <p>Nenhum pedido no momento.</p>
@@ -194,8 +232,13 @@
                             <button class="info-button" onclick="window.location.href='${pedido.id}/'">
                                 <img src="/static/imagens/info.png" alt="info" class="info-icon">
                             </button>
-                            <button class="confirm-button">Confirmar</button>
-                        `;
+                            <button class="btn-cancelar" onclick="cancelarPedido('${pedido.id}')">
+                                <img src="/static/imagens/remove.png" alt="cancelar" class="cancel-icon">
+                            </button>
+                            <button class="confirm-button">
+                                <img src="/static/imagens/check-box (1).png" alt="confirmar" class="confirm-icon">
+                            </button>
+                                `;
 
                         container.appendChild(div);
                     });
@@ -217,14 +260,17 @@
                             'Content-Type': 'application/json',
                             'X-CSRFToken': getCookie('csrftoken'),
                         },
-                        body: JSON.stringify({ pedido_id: pedidoId })
+                        body: JSON.stringify({
+                            acao: 'confirmar',  // Adicionado!
+                            id: pedidoId
+                        })
                     })
                     .then(response => response.json())
                     .then(data => {
-                        if (data.success) {
+                        if (data.status === 'success') {
                             pedidoDiv.remove();
                         } else {
-                            alert("Erro ao confirmar pedido: " + data.error);
+                            alert("Erro ao confirmar pedido: " + data.message);
                         }
                     });
                 });
@@ -248,52 +294,32 @@
 
         setInterval(atualizarPedidos, 2500);
         window.onload = atualizarPedidos;
-    </script>
-        <!-- <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                document.querySelectorAll('.confirm-button').forEach(button => {
-                    button.addEventListener('click', function(event) {
-                        event.preventDefault();
-                        
-                        let pedidoDiv = this.closest('.order');
-                        let pedidoId = pedidoDiv.querySelector("input[name='pedido_id']").value;
-        
-                        fetch('/cozinha/', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-CSRFToken': getCookie('csrftoken'),
-                            },
-                            body: JSON.stringify({ pedido_id: pedidoId })
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success) {
-                                pedidoDiv.remove();  // Remove o pedido da tela sem recarregar
-                            } else {
-                                alert("Erro ao confirmar pedido: " + data.error);
-                            }
-                        })
-                        .catch(error => console.error("Erro na requisição:", error));
-                    });
-                });
-            });
-        
-            function getCookie(name) {
-                let cookieValue = null;
-                if (document.cookie && document.cookie !== '') {
-                    const cookies = document.cookie.split(';');
-                    for (let i = 0; i < cookies.length; i++) {
-                        const cookie = cookies[i].trim();
-                        if (cookie.startsWith(name + '=')) {
-                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                            break;
-                        }
-                    }
+
+        function cancelarPedido(id) {
+            // document.getElementsByClassName("btn-cancelar")[0].style.display = "none";
+            if (!confirm("Tem certeza que deseja cancelar este pedido?")) return;
+            
+            fetch("/cozinha/", {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": getCookie("csrftoken"),
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    acao: "cancelar",
+                    id: id
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === "success") {
+                    atualizarPedidos();
+                } else {
+                    alert("Erro ao cancelar pedido: " + data.message);
                 }
-                return cookieValue;
-            } -->
-        </script>
+            });
+        }
+    </script>
 </body>
 </html>
 

@@ -398,6 +398,12 @@
         });
 
         function enviarPedido() {
+            const sendButton = document.querySelector('.send-btn'); // Certifique-se que este seletor corresponde ao seu botão "Continuar"
+
+            // Desabilitar o botão para evitar múltiplos cliques
+            sendButton.disabled = true;
+            sendButton.textContent = 'Enviando...'; // Feedback visual (opcional)
+
             let pedido = [];
             let temEstoqueInsuficiente = false;
 
@@ -417,28 +423,37 @@
                 }
             });
 
-            if (temEstoqueInsuficiente) return;
+            if (temEstoqueInsuficiente) {
+                sendButton.disabled = false; // Reabilitar se houver erro antes do fetch
+                sendButton.textContent = 'Continuar';
+                return;
+            }
 
             if (pedido.length === 0) {
                 alert("Por favor, selecione pelo menos um produto.");
+                sendButton.disabled = false; // Reabilitar
+                sendButton.textContent = 'Continuar';
                 return;
             }
 
             let metodo_pagamento = document.getElementById("metodo_pagamento").value;
             if (!metodo_pagamento) {
                 alert("Por favor, selecione um método de pagamento.");
+                sendButton.disabled = false; // Reabilitar
+                sendButton.textContent = 'Continuar';
                 return;
             }
 
             let cliente_id = document.querySelector('input[name="cliente_id"]').value;
+            const csrftoken = document.querySelector('[name=csrf-token]').content;
 
-            const dadosPedido = {
+            // É importante que `dadosPedido` seja definido aqui se você o usa no `localStorage.setItem` no caso de sucesso.
+            // No seu código original, `dadosPedido` era definido antes do fetch, o que é bom.
+            const dadosPedidoParaLocalStorage = {
                 cliente_id: cliente_id,
                 metodo_pagamento: metodo_pagamento,
                 itens: pedido
             };
-
-            const csrftoken = document.querySelector('[name=csrf-token]').content;
 
             fetch(`/pedido/${cliente_id}/`, {
                 method: 'POST',
@@ -447,32 +462,40 @@
                     'X-CSRFToken': csrftoken
                 },
                 body: JSON.stringify({
-                    cliente_id: cliente_id,
+                    // Removi cliente_id do corpo do JSON, pois ele já está na URL e é pego em `views.py` como `kwargs`.
+                    // Se sua view `PagCliente` espera `cliente_id` no corpo do JSON, mantenha-o.
+                    // No seu `views.py`, `cliente_id` é um parâmetro da URL para o método `post`.
+                    // O corpo do JSON enviado é `data = json.loads(request.body)`
+                    // e você acessa `data.get("metodo_pagamento")`, `data.get("tipo_consumo")`, etc.
+                    // Portanto, o `cliente_id` no corpo do JSON não é usado pela view `PagCliente`.
                     metodo_pagamento: metodo_pagamento,
-                    tipo_consumo: 'local',  // ou 'viagem'
-                    observacoes: "",
+                    tipo_consumo: 'local',  // ou 'viagem' - você pode querer tornar isso dinâmico
+                    observacoes: "", // você pode querer coletar isso do usuário
                     itens: pedido
                 })
             })
-
             .then(response => response.json())
             .then(data => {
                 if (data.status === "ok") {
-                    localStorage.setItem("pedidoData", JSON.stringify(dadosPedido));
+                    localStorage.setItem("pedidoData", JSON.stringify(dadosPedidoParaLocalStorage));
                     window.location.href = `/pedido/${cliente_id}/escolher-local/`;
+                    // Não é necessário reabilitar o botão aqui, pois a página será redirecionada.
                 } else {
                     if (Array.isArray(data.mensagens)) {
-                    alert("Erro no pedido:\n\n" + data.mensagens.join("\n"));
-                } else {
-                    alert("Erro inesperado.");
-                }
-
+                        alert("Erro no pedido:\n\n" + data.mensagens.join("\n"));
+                    } else {
+                        alert("Erro inesperado ao processar o pedido.");
+                    }
+                    sendButton.disabled = false; // Reabilitar em caso de erro do servidor
+                    sendButton.textContent = 'Continuar';
                 }
             })
             .catch(error => {
-                console.error("Erro ao validar pedido: ", error);
+                console.error("Erro ao enviar pedido: ", error);
                 // alert("Erro ao validar o pedido. Tente novamente. Parece que o pedido já foi finalizado ou não existe.");
                 document.getElementById("modalErro").style.display = "flex";
+                sendButton.disabled = false; // Reabilitar em caso de erro de rede/fetch
+                sendButton.textContent = 'Continuar';
             });
         }
 

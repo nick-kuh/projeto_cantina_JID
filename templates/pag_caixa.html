@@ -112,33 +112,52 @@
             min-width: 120px;
             text-align: center;
         }
-
+button img {
+            display: block;
+            margin: auto;
+        }
         .btn-cancelar {
             background-color: #e74c3c;
             color: white;
             border: none;
-            padding: 8px 12px;
-            border-radius: 6px;
+            padding: 6px;
+            margin: 5px;
+            border-radius: 10px;
             cursor: pointer;
-            transition: background-color 0.3s ease;
+            /* font-size: 16px; */
+            transition: transform 0.2s, background-color 0.2s;
         }
-        .btn-cancelar:hover {
-            background-color: #c0392b;
+        .btn-cancelar:hover{
+            background-color: rgb(100, 0, 0);
+            transform: scale(1.1);
         }
 
+        .cancel-icon {
+            /* padding: 10px; */
+            width: 25px; 
+            height: 25px;
+            object-fit: contain;
+        }
         .confirm-button {
             background-color: #28A745;
             color: white;
             border: none;
-            padding: 10px 15px;
+            padding: 5px;
+            margin: 5px;
             border-radius: 10px;
             cursor: pointer;
-            font-size: 16px;
+            /* font-size: 16px; */
             transition: transform 0.2s, background-color 0.2s;
         }
         .confirm-button:hover {
             background-color: darkgreen;
             transform: scale(1.1);
+        }
+        .confirm-icon {
+            /* padding: 10px; */
+            width: 29px; 
+            height: 29px;
+            object-fit: contain;
         }
     </style>
 </head>
@@ -163,8 +182,12 @@
                 <div class="order-price">
                     R$ {{ pedido.total }}
                 </div>
-                <button class="btn-cancelar" onclick="cancelarPedido('{{ pedido.id }}')">Cancelar</button>
-                <button class="confirm-button">Confirmar</button>
+                <button class="btn-cancelar" onclick="cancelarPedido('{{ pedido.id }}')">
+                    <img src="/static/imagens/remove.png" alt="cancelar" class="cancel-icon">
+                </button>
+                <button class="confirm-button">
+                    <img src="/static/imagens/check-box (1).png" alt="confirmar" class="confirm-icon">
+                </button>
             </div>
         {% empty %}
             <p>Nenhum pedido no momento.</p>
@@ -200,7 +223,12 @@
                             <div class="order-price">
                                 R$ ${pedido.total ?? '0.00'}
                             </div>
-                            <button class="confirm-button">Confirmar</button>
+                            <button class="btn-cancelar" onclick="cancelarPedido('${pedido.id}')">
+                                <img src="/static/imagens/remove.png" alt="cancelar" class="cancel-icon">
+                            </button>
+                            <button class="confirm-button">
+                                <img src="/static/imagens/check-box (1).png" alt="confirmar" class="confirm-icon">
+                            </button>
                         `;
     
                         container.appendChild(div);
@@ -257,43 +285,30 @@
         setInterval(atualizarPedidosCaixa, 2500);
         window.onload = atualizarPedidosCaixa;
 
-        // function cancelarPedido(pedidoId) {
-        //     if (confirm("Tem certeza que deseja cancelar este pedido?")) {
-        //         fetch("/cancelar_pedido/", {
-        //             method: "POST",
-        //             headers: {
-        //                 "Content-Type": "application/json",
-        //                 "X-CSRFToken": getCookie('csrftoken')
-        //             },
-        //             body: JSON.stringify({ pedido_id: pedidoId })
-        //         })
-        //         .then(response => response.json())
-        //         .then(data => {
-        //             if (data.success) {
-        //                 alert("Pedido cancelado com sucesso.");
-        //                 location.reload();
-        //             } else {
-        //                 alert("Erro ao cancelar: " + data.error);
-        //             }
-        //         });
-        //     }
-        // }
+        function cancelarPedido(pedidoId) {
+            if (!confirm("Tem certeza que deseja cancelar este pedido?")) return;
 
-        // // função auxiliar para CSRF
-        // function getCookie(name) {
-        //     let cookieValue = null;
-        //     if (document.cookie && document.cookie !== '') {
-        //         let cookies = document.cookie.split(';');
-        //         for (let i = 0; i < cookies.length; i++) {
-        //             let cookie = cookies[i].trim();
-        //             if (cookie.substring(0, name.length + 1) === (name + '=')) {
-        //                 cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-        //                 break;
-        //             }
-        //         }
-        //     }
-        //     return cookieValue;
-        // }
+            fetch('/caixa/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+                body: JSON.stringify({ acao: "cancelar", id: pedidoId })
+
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === "success" || data.success === true) {
+                    const pedidoDiv = document.querySelector(`input[value="${pedidoId}"]`).closest('.order');
+                    pedidoDiv.remove();
+                } else {
+                    alert("Erro ao cancelar pedido: " + (data.error || data.message || "Erro desconhecido"));
+                }
+            })
+            .catch(error => console.error("Erro ao cancelar pedido:", error));
+        }
+
     </script>
 </body>
 </html>

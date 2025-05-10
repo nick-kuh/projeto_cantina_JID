@@ -35,9 +35,12 @@ class Pedido(models.Model):
     liberado_para_cozinha = models.BooleanField(default=False)
     liberado_para_caixa = models.BooleanField(default=False)
     time_liberado_para_cozinha = models.DateTimeField(null=True, blank=True)
+    time_off = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
-        return f"{self.cliente}"
+        itens = self.itens.all()
+        produtos_str = ', '.join([f"{item.produto.nome} (x{item.quantidade})" for item in itens])
+        return f"{self.cliente} -> {produtos_str} -> R$ {self.total:.2f}"
     
     def calcular_total(self):
         total = sum(item.produto.preco * item.quantidade for item in self.itens.all())
