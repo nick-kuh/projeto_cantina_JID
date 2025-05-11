@@ -102,14 +102,34 @@ class PagCliente(ListView):
                     observacoes=observacoes
                 )
 
+                # Agrupa os itens por produto_id somando a quantidade
+                itens_agrupados = defaultdict(int)
                 for item in itens:
                     produto_id = item.get("produto_id")
                     quantidade = item.get("quantidade")
+                    itens_agrupados[produto_id] += quantidade
 
-                    # produto = Produto.objects.select_for_update().get(id=produto_id)
+                for produto_id, quantidade_total in itens_agrupados.items():
+                    produto = Produto.objects.select_for_update().get(id=produto_id)
+                    
+                    if produto.quantidade < quantidade_total:
+                        mensagens_erro.append(
+                            f'Produto "{produto.nome}" não tem estoque suficiente. Disponível: {produto.quantidade}'
+                        )
 
-                    ItemPedido.objects.create(pedido=pedido, produto=produto, quantidade=quantidade)
-                    # produto.quantidade -= quantidade
+                if mensagens_erro:
+                    return JsonResponse({"status": "erro", "mensagens": mensagens_erro})
+
+                pedido = Pedido.objects.create(
+                    cliente=cliente,
+                    metodo_pagamento=metodo_pagamento,
+                    tipo_consumo=tipo_consumo,
+                    observacoes=observacoes
+                )
+
+                for produto_id, quantidade_total in itens_agrupados.items():
+                    produto = Produto.objects.select_for_update().get(id=produto_id)
+                    ItemPedido.objects.create(pedido=pedido, produto=produto, quantidade=quantidade_total)
                     produto.save()
 
             return JsonResponse({"status": "ok", "pedido_id": pedido.id})
@@ -329,6 +349,106 @@ def editar_pedido(request, pedido_id):
 
     return render(request, 'pag_detalhe_pedido.html', {'pedido': pedido, 'modo_edicao': True})
 
+
+@staff_member_required
+def pedidos_json(request):
+    pedidos = Pedido.objects.filter(liberado_para_cozinha=True).order_by(
+        Case(
+            When(tipo_consumo='viagem', then=Value(0)),
+            When(tipo_consumo='local', then=Value(1)),
+            default=Value(2),
+            output_field=IntegerField(),
+        ),
+        'time_liberado_para_cozinha'
+    )
+
+    lista = []
+    for pedido in pedidos:
+        itens = [f"{item.produto.nome} ({item.quantidade})" for item in pedido.itens.all()]
+        lista.append({
+            'id': pedido.id,
+            'cliente': pedido.cliente.nome,
+            'itens': ' | '.join(itens),
+            'observacoes': pedido.observacoes,
+            'tipo_consumo': pedido.tipo_consumo,
+        })
+
+    return JsonResponse({'pedidos': lista})
+# def pedidos_json(request):
+#     pedidos = Pedido.objects.filter(liberado_para_cozinha=True).order_by('-id').reverse()
+
+#     lista = []
+#     for pedido in pedidos:
+#         itens = [f"{item.produto.nome} ({item.quantidade})" for item in pedido.itens.all()]
+#         lista.append({
+#             'id': pedido.id,
+#             'cliente': pedido.cliente.nome,
+#             'itens': ' | '.join(itens),
+#             'observacoes': pedido.observacoes,
+#             'tipo_consumo': pedido.tipo_consumo,
+#         })
+
+#     return JsonResponse({'pedidos': lista})
+
+@staff_member_required
+def pedidos_caixa_json(request):
+    pedidos = Pedido.objects.filter(
+        liberado_para_cozinha=False,
+        liberado_para_caixa=True
+    ).order_by('-id').reverse()
+
+    lista = []
+    for pedido in pedidos:
+        itens_agrupados = defaultdict(int)
+        for item in pedido.itens.all():
+            itens_agrupados[item.produto.nome] += item.quantidade
+
+        itens_formatados = [f"{nome} (x{quantidade})" for nome, quantidade in itens_agrupados.items()]
+
+        lista.append({
+            'id': pedido.id,
+            'cliente': pedido.cliente.nome,
+            'itens': ' | '.join(itens_formatados),
+            'observacoes': pedido.observacoes,
+            'metodo_pagamento': pedido.metodo_pagamento,
+            'tipo_consumo': pedido.tipo_consumo,
+        })
+
+    return JsonResponse({'pedidos': lista})
+
+
+@csrf_exempt
+def cancelar_pedido(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            pedido_id = data.get('pedido_id')
+            pedido = Pedido.objects.get(id=pedido_id)
+
+            if pedido.liberado_para_caixa or pedido.liberado_para_cozinha:
+                return JsonResponse({'success': False, 'error': 'Pedido já em andamento, não pode ser cancelado'})
+
+            itens_str = " | ".join([f"{item.produto.nome} ({item.quantidade})" for item in pedido.itens.all()])
+            PedidoCancelado.objects.create(
+                cliente=pedido.cliente,
+                itens=itens_str,
+                metodo_pagamento=pedido.metodo_pagamento,
+            )
+
+            # Retorna ao estoque
+            for item in pedido.itens.all():
+                item.produto.quantidade += item.quantidade
+                item.produto.save()
+
+            pedido.delete()
+
+            return JsonResponse({'success': True})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    else:
+        return JsonResponse({'success': False, 'error': 'Método não permitido'})
+    
+
 # Garante que apenas admins acessem essa view
 @staff_member_required 
 def exportar_excel_pedidos(request):
@@ -475,109 +595,3 @@ def exportar_excel_pedidos(request):
                 cell.border = thin_border
 
     return response
-    # dados = []
-
-    # for pedido in PedidoEntregue.objects.all():
-    #     dados.append({
-    #         "Cliente": pedido.cliente.nome,
-    #         "Itens": pedido.itens,
-    #         "Total": float(pedido.total),
-    #         "Forma de Pagamento": pedido.metodo_pagamento,
-    #         "Entregue em": pedido.entregue_em.strftime("%d/%m/%Y %H:%M"),
-    #     })
-
-    # df = pd.DataFrame(dados)
-    # response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    # response['Content-Disposition'] = 'attachment; filename="pedidos_exportados.xlsx"'
-    # df.to_excel(response, index=False)
-    # return response
-
-
-@staff_member_required
-def pedidos_json(request):
-    pedidos = Pedido.objects.filter(liberado_para_cozinha=True).order_by(
-        Case(
-            When(tipo_consumo='viagem', then=Value(0)),
-            When(tipo_consumo='local', then=Value(1)),
-            default=Value(2),
-            output_field=IntegerField(),
-        ),
-        'time_liberado_para_cozinha'
-    )
-
-    lista = []
-    for pedido in pedidos:
-        itens = [f"{item.produto.nome} ({item.quantidade})" for item in pedido.itens.all()]
-        lista.append({
-            'id': pedido.id,
-            'cliente': pedido.cliente.nome,
-            'itens': ' | '.join(itens),
-            'observacoes': pedido.observacoes,
-            'tipo_consumo': pedido.tipo_consumo,
-        })
-
-    return JsonResponse({'pedidos': lista})
-# def pedidos_json(request):
-#     pedidos = Pedido.objects.filter(liberado_para_cozinha=True).order_by('-id').reverse()
-
-#     lista = []
-#     for pedido in pedidos:
-#         itens = [f"{item.produto.nome} ({item.quantidade})" for item in pedido.itens.all()]
-#         lista.append({
-#             'id': pedido.id,
-#             'cliente': pedido.cliente.nome,
-#             'itens': ' | '.join(itens),
-#             'observacoes': pedido.observacoes,
-#             'tipo_consumo': pedido.tipo_consumo,
-#         })
-
-#     return JsonResponse({'pedidos': lista})
-
-@staff_member_required
-def pedidos_caixa_json(request):
-    pedidos = Pedido.objects.filter(liberado_para_cozinha=False, liberado_para_caixa=True).order_by('-id').reverse()
-
-    lista = []
-    for pedido in pedidos:
-        itens = [f"{item.produto.nome} ({item.quantidade})" for item in pedido.itens.all()]
-        lista.append({
-            'id': pedido.id,
-            'cliente': pedido.cliente.nome,
-            'itens': ' | '.join(itens),
-            'metodo_pagamento':pedido.metodo_pagamento,
-            'tipo_consumo': pedido.tipo_consumo,
-            'total': f"{pedido.total:.2f}".replace('.', ',') if pedido.total else "0,00",
-        })
-
-    return JsonResponse({'pedidos': lista})
-
-@csrf_exempt
-def cancelar_pedido(request):
-    if request.method == 'POST':
-        try:
-            data = json.loads(request.body)
-            pedido_id = data.get('pedido_id')
-            pedido = Pedido.objects.get(id=pedido_id)
-
-            if pedido.liberado_para_caixa or pedido.liberado_para_cozinha:
-                return JsonResponse({'success': False, 'error': 'Pedido já em andamento, não pode ser cancelado'})
-
-            itens_str = " | ".join([f"{item.produto.nome} ({item.quantidade})" for item in pedido.itens.all()])
-            PedidoCancelado.objects.create(
-                cliente=pedido.cliente,
-                itens=itens_str,
-                metodo_pagamento=pedido.metodo_pagamento,
-            )
-
-            # Retorna ao estoque
-            for item in pedido.itens.all():
-                item.produto.quantidade += item.quantidade
-                item.produto.save()
-
-            pedido.delete()
-
-            return JsonResponse({'success': True})
-        except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
-    else:
-        return JsonResponse({'success': False, 'error': 'Método não permitido'})
