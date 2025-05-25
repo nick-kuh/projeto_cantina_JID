@@ -5,6 +5,7 @@ from django.views.decorators.csrf import csrf_exempt
 from .models import Produto, ItemPedido, Pedido, Cliente, PedidoEntregue, PedidoCancelado
 from django.http import HttpResponse
 from django.db import transaction 
+from django.utils.formats import number_format
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils.decorators import method_decorator
 import pandas as pd 
@@ -374,21 +375,7 @@ def pedidos_json(request):
         })
 
     return JsonResponse({'pedidos': lista})
-# def pedidos_json(request):
-#     pedidos = Pedido.objects.filter(liberado_para_cozinha=True).order_by('-id').reverse()
 
-#     lista = []
-#     for pedido in pedidos:
-#         itens = [f"{item.produto.nome} ({item.quantidade})" for item in pedido.itens.all()]
-#         lista.append({
-#             'id': pedido.id,
-#             'cliente': pedido.cliente.nome,
-#             'itens': ' | '.join(itens),
-#             'observacoes': pedido.observacoes,
-#             'tipo_consumo': pedido.tipo_consumo,
-#         })
-
-#     return JsonResponse({'pedidos': lista})
 
 @staff_member_required
 def pedidos_caixa_json(request):
@@ -412,6 +399,7 @@ def pedidos_caixa_json(request):
             'observacoes': pedido.observacoes,
             'metodo_pagamento': pedido.metodo_pagamento,
             'tipo_consumo': pedido.tipo_consumo,
+            'total': number_format(pedido.total, 2)
         })
 
     return JsonResponse({'pedidos': lista})
