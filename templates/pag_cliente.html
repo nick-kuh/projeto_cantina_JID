@@ -260,7 +260,8 @@
     <div class="content">
         <h2 class="welcome">Bem-vindo, {{ cliente.nome }}!</h2>
         {% for produto in lista_produtos %}
-        <div class="item" data-id="{{ produto.id }}" data-estoque="{{ produto.estoque }}" data-nome="{{ produto.nome }}">
+        {% if produto.quantidade > 0 %}
+        <div class="item" data-id="{{ produto.id }}" data-estoque="{{ produto.quantidade }}" data-nome="{{ produto.nome }}">
             <img src="{{ produto.imagem.url }}" alt="Imagem do produto">
             <div class="item-info">
                 <div class="name">{{ produto.nome }}</div>
@@ -274,7 +275,7 @@
                 </div>
             </div>
         </div>
-        
+        {% endif %}
         
         {% endfor %}
 

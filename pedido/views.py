@@ -17,6 +17,8 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from collections import defaultdict
 import re
+import pytz
+
 
 
 class PagInicial(TemplateView):
@@ -140,8 +142,6 @@ class PagCliente(ListView):
             print(traceback.format_exc())
             return JsonResponse({"status": "erro", "mensagens": [str(e)]}, status=500)
 
-    
-
 class EscolherLocalView(View):
     template_name = "pag_escolher_local.html"
 
@@ -251,8 +251,7 @@ class CozinhaView(View):
  
         
         else:
-            return JsonResponse({"status": "error", "message": "Ação inválida"}, status=400)
-        
+            return JsonResponse({"status": "error", "message": "Ação inválida"}, status=400)       
 
 @method_decorator(staff_member_required, name='dispatch')
 class CaixaView(View):
@@ -303,8 +302,6 @@ class CaixaView(View):
                 return JsonResponse({'success': True})
             except Exception as e:
                 return JsonResponse({'success': False, 'error': str(e)})
-            
-        
         
 def detalhe_pedido(request, pedido_id):
     pedido = get_object_or_404(Pedido, id=pedido_id)
@@ -350,7 +347,6 @@ def editar_pedido(request, pedido_id):
 
     return render(request, 'pag_detalhe_pedido.html', {'pedido': pedido, 'modo_edicao': True})
 
-
 @staff_member_required
 def pedidos_json(request):
     pedidos = Pedido.objects.filter(liberado_para_cozinha=True).order_by(
@@ -375,7 +371,6 @@ def pedidos_json(request):
         })
 
     return JsonResponse({'pedidos': lista})
-
 
 @staff_member_required
 def pedidos_caixa_json(request):
@@ -403,7 +398,6 @@ def pedidos_caixa_json(request):
         })
 
     return JsonResponse({'pedidos': lista})
-
 
 @csrf_exempt
 def cancelar_pedido(request):
@@ -435,7 +429,6 @@ def cancelar_pedido(request):
             return JsonResponse({'success': False, 'error': str(e)})
     else:
         return JsonResponse({'success': False, 'error': 'Método não permitido'})
-    
 
 # Garante que apenas admins acessem essa view
 @staff_member_required 
@@ -460,7 +453,7 @@ def exportar_excel_pedidos(request):
         itens = re.findall(r'([^\(,]+)\s*\(?(\d+)?\)?', itens_texto)
 
         for nome_item, qtd in itens:
-            nome_item = nome_item.strip()
+            nome_item = re.sub(r'^[^\w]*|[^\w\s]*$', '', nome_item.strip())
             quantidade = int(qtd) if qtd else 1
             vendas_por_produto[nome_item] += quantidade
 
@@ -473,7 +466,7 @@ def exportar_excel_pedidos(request):
 
     df_pedidos = pd.DataFrame(dados)
 
-    hoje = datetime.now()
+    hoje = datetime.now(pytz.timezone('America/Sao_Paulo'))
     data_formatada = hoje.strftime("%d/%m/%Y")
     nome_arquivo = f'Cantina JID - {hoje.strftime("%d/%m")}.xlsx'
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
