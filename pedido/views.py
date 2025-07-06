@@ -15,7 +15,7 @@ from django.utils import timezone
 from datetime import datetime
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 import re
 import pytz
 
@@ -44,15 +44,31 @@ class PagCliente(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
+
         cliente_id = self.kwargs.get('cliente_id')
         cliente = get_object_or_404(Cliente, id=cliente_id)
-
         context['cliente'] = cliente
-        context['lista_produtos'] = Produto.objects.all()
-        context['lista_pedidos'] = Pedido.objects.filter(cliente=cliente)
-        context['lista_itens_pedidos'] = ItemPedido.objects.filter(pedido__cliente=cliente)
 
+        produtos = Produto.objects.filter(quantidade__gt=0).order_by('nome')
+
+        # Ordem desejada
+        ordem_desejada = ['Caldos', 'Salgados', 'Doces', 'Bebidas']
+
+        # Agrupar produtos por categoria válida
+        categorias_dict = defaultdict(list)
+        for produto in produtos:
+            if produto.categoria:
+                categoria = produto.categoria.strip().capitalize()
+                if categoria in ordem_desejada:
+                    categorias_dict[categoria].append(produto)
+
+        # Criar dict ordenado manualmente
+        categorias_produtos = OrderedDict()
+        for cat in ordem_desejada:
+            if cat in categorias_dict:
+                categorias_produtos[cat] = categorias_dict[cat]
+
+        context['categorias_produtos'] = categorias_produtos.items()
         return context
 
     def dispatch(self, request, *args, **kwargs):

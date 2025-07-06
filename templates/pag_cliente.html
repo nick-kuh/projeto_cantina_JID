@@ -72,6 +72,35 @@
             border-radius: 5px;
         }
 
+        .categoria-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 25px 0 15px;
+        }
+
+        .categoria-header .linha {
+            flex: 1;
+            height: 1.5px; /* Aumenta a espessura da linha */
+            background-color: black;
+            margin: 0 10px;
+            opacity: 0.6;
+            border-radius: 2px; /* deixa levemente arredondado */
+        }
+
+
+        .categoria-header .categoria-nome {
+            font-size: 20px;
+            font-weight: bold;
+            color: black;
+            padding: 3px 10px;
+            border-radius: 20px;
+            background-color: white;
+            border: 1px solid black;
+        }
+
+
+
         .name {
             font-weight: bold;
             font-size: 18px; 
@@ -259,24 +288,29 @@
 
     <div class="content">
         <h2 class="welcome">Bem-vindo, {{ cliente.nome }}!</h2>
-        {% for produto in lista_produtos %}
-        {% if produto.quantidade > 0 %}
-        <div class="item" data-id="{{ produto.id }}" data-estoque="{{ produto.quantidade }}" data-nome="{{ produto.nome }}">
-            <img src="{{ produto.imagem.url }}" alt="Imagem do produto">
-            <div class="item-info">
-                <div class="name">{{ produto.nome }}</div>
-                <div class="price-quantity">
-                    <div class="price">R$ {{ produto.preco }}</div>
-                    <div class="quantity">
-                        <button onclick="changeQuantity('{{ produto.id }}', -1)">-</button>
-                        <span id="{{ produto.id }}">0</span>
-                        <button onclick="changeQuantity('{{ produto.id }}', 1)">+</button>
+        {% for categoria, produtos in categorias_produtos %}
+            <div class="categoria-header">
+                <span class="linha"></span>
+                <span class="categoria-nome">{{ categoria }}</span>
+                <span class="linha"></span>
+            </div>
+
+            {% for produto in produtos %}
+            <div class="item" data-id="{{ produto.id }}" data-estoque="{{ produto.quantidade }}" data-nome="{{ produto.nome }}">
+                <img src="{{ produto.imagem.url }}" alt="Imagem do produto">
+                <div class="item-info">
+                    <div class="name">{{ produto.nome }}</div>
+                    <div class="price-quantity">
+                        <div class="price">R$ {{ produto.preco }}</div>
+                        <div class="quantity">
+                            <button onclick="changeQuantity('{{ produto.id }}', -1)">-</button>
+                            <span id="{{ produto.id }}">0</span>
+                            <button onclick="changeQuantity('{{ produto.id }}', 1)">+</button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-        {% endif %}
-        
+            {% endfor %}
         {% endfor %}
 
         <div class="total">Total: <strong id="total">R$ 0,00</strong></div>

@@ -7,13 +7,22 @@ class Cliente(models.Model):
         return f"{self.id} - {self.nome}" 
 
 class Produto(models.Model):
+    CATEGORIAS = [
+        ('Salgados', 'Salgados'),
+        ('Doces', 'Doces'),
+        ('Bebidas', 'Bebidas'),
+        ('Caldos', 'Caldos'),
+    ]
+
     nome = models.CharField(max_length=70, unique=True) 
-    preco = models.DecimalField(max_digits=10, decimal_places=2)  # Preço do produto
-    imagem = models.ImageField(upload_to='imagem_produto', null=True, blank=True) # torna a imagem como opcional 
-    quantidade = models.PositiveIntegerField(default=0)  # Estoque do produto
+    preco = models.DecimalField(max_digits=10, decimal_places=2)
+    imagem = models.ImageField(upload_to='imagem_produto', null=True, blank=True)
+    quantidade = models.PositiveIntegerField(default=0)
+    categoria = models.CharField(max_length=20, choices=CATEGORIAS, default='Outros')  # <- agora é dropdown no admin
 
     def __str__(self):
         return f"{self.nome}"
+
 
 class Pedido(models.Model):
 
