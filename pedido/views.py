@@ -52,7 +52,7 @@ class PagCliente(ListView):
         produtos = Produto.objects.filter(quantidade__gt=0).order_by('nome')
 
         # Ordem desejada
-        ordem_desejada = ['Caldos', 'Salgados', 'Doces', 'Bebidas']
+        ordem_desejada = ["Combos", 'Caldos', 'Salgados', 'Doces', 'Bebidas']
 
         # Agrupar produtos por categoria válida
         categorias_dict = defaultdict(list)
