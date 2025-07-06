@@ -349,7 +349,7 @@
             let currentValue = parseInt(quantityElement.textContent);
 
             if (change === 1 && currentValue >= estoque) {
-                alert(`Desculpe! Não temos mais "${nomeProduto}" em estoque.`);
+                alert(`Desculpe! Temos apenas ${estoque} unidade(s) de "${nomeProduto}" em estoque.`);
                 return;
             }
 
