@@ -12,6 +12,7 @@ class Produto(models.Model):
         ('Doces', 'Doces'),
         ('Bebidas', 'Bebidas'),
         ('Caldos', 'Caldos'),
+        ('Combos', 'Combos')
     ]
 
     nome = models.CharField(max_length=70, unique=True) 
