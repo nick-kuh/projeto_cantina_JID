@@ -2,7 +2,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.views.generic import TemplateView, ListView, View
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from .models import Produto, ItemPedido, Pedido, Cliente, PedidoEntregue, PedidoCancelado
+from .models import Produto, ItemPedido, Pedido, Cliente, PedidoEntregue, PedidoCancelado, Combo
 from django.http import HttpResponse
 from django.db import transaction 
 from django.utils.formats import number_format
@@ -16,6 +16,8 @@ from datetime import datetime
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from collections import defaultdict, OrderedDict
+from django.core.serializers.json import DjangoJSONEncoder
+from collections import Counter
 import re
 import pytz
 
@@ -37,6 +39,40 @@ def salvar_nome(request):
         return JsonResponse({'erro': 'Nome não pode estar vazio'}, status=400)
 
     return JsonResponse({'erro': 'Método não permitido'}, status=405)
+
+def devolver_estoque_do_item(item):
+    produto = item.produto
+    quantidade = item.quantidade
+
+    if hasattr(produto, 'combo'):
+        combo = produto.combo
+
+        if combo.tipo == 'fixo':
+            # devolve todos os produtos fixos do combo
+            for combo_item in combo.itens.all():
+                prod = combo_item.produto
+                prod.quantidade += quantidade
+                prod.save()
+
+        elif combo.tipo == 'opcional':
+            # devolve os fixos
+            for combo_item in combo.itens.all():
+                prod = combo_item.produto
+                prod.quantidade += quantidade
+                prod.save()
+
+            # devolve as escolhas específicas do item
+            escolhas_ids = item.escolhas_combo or []
+            for escolha_id in escolhas_ids:
+                prod_escolha = Produto.objects.get(id=escolha_id)
+                prod_escolha.quantidade += 1  # cada escolha é 1 unid
+                prod_escolha.save()
+
+    else:
+        # Produto comum
+        produto.quantidade += quantidade
+        produto.save()
+
 
 class PagCliente(ListView):
     template_name = "pag_cliente.html"
@@ -69,6 +105,28 @@ class PagCliente(ListView):
                 categorias_produtos[cat] = categorias_dict[cat]
 
         context['categorias_produtos'] = categorias_produtos.items()
+
+        combos_opcionais = Combo.objects.filter(tipo='opcional')
+        opcoes_json = {}
+
+        for combo in combos_opcionais:
+            opcoes = []
+            for opcao in combo.opcoes.all():
+                produtos = Produto.objects.filter(categoria=opcao.categoria, quantidade__gt=0)
+                opcoes.append({
+                    'categoria': opcao.categoria,
+                    'categoria_nome': dict(Produto.CATEGORIAS).get(opcao.categoria),
+                    'produtos': [{
+                        'id': p.id,
+                        'nome': p.nome,
+                        'imagem_url': p.imagem.url if p.imagem else ""
+                    } for p in produtos]
+                })
+
+            opcoes_json[combo.produto_ptr.id] = opcoes  # ✅ Fora do for interno
+
+
+        context['opcoes_json'] = json.dumps(opcoes_json, cls=DjangoJSONEncoder)
         return context
 
     def dispatch(self, request, *args, **kwargs):
@@ -100,6 +158,7 @@ class PagCliente(ListView):
             with transaction.atomic():
                 cliente = get_object_or_404(Cliente, id=cliente_id)
 
+                # 1. Verifica estoque antes
                 for item in itens:
                     produto_id = item.get("produto_id")
                     quantidade = item.get("quantidade")
@@ -121,37 +180,97 @@ class PagCliente(ListView):
                     observacoes=observacoes
                 )
 
-                # Agrupa os itens por produto_id somando a quantidade
-                itens_agrupados = defaultdict(int)
+                # for item in itens:
+                #     produto_id = item.get("produto_id")
+                #     quantidade = item.get("quantidade", 1)
+                #     escolhas = item.get("escolhas", [])
+
+                #     produto = Produto.objects.select_for_update().get(id=produto_id)
+
+                #     if produto.quantidade < quantidade:
+                #         mensagens_erro.append(
+                #             f'Produto "{produto.nome}" não tem estoque suficiente. Disponível: {produto.quantidade}'
+                #         )
+
+                #     # salva o item do pedido com as escolhas específicas
+                #     ItemPedido.objects.create(
+                #         pedido=pedido,
+                #         produto=produto,
+                #         quantidade=quantidade,
+                #         escolhas_combo=escolhas or None
+                #     )
+
+                    # produto.quantidade -= quantidade
+                    # produto.save()
+
                 for item in itens:
                     produto_id = item.get("produto_id")
-                    quantidade = item.get("quantidade")
-                    itens_agrupados[produto_id] += quantidade
+                    quantidade = item.get("quantidade", 1)
+                    escolhas = item.get("escolhas", [])
 
-                for produto_id, quantidade_total in itens_agrupados.items():
                     produto = Produto.objects.select_for_update().get(id=produto_id)
-                    
-                    if produto.quantidade < quantidade_total:
-                        mensagens_erro.append(
-                            f'Produto "{produto.nome}" não tem estoque suficiente. Disponível: {produto.quantidade}'
-                        )
+
+                    if hasattr(produto, 'combo'):  
+                        combo = produto.combo  
+
+                        if combo.tipo == 'fixo':
+                            # Descontar todos os itens fixos do combo
+                            for combo_item in combo.itens.all():
+                                prod = combo_item.produto
+                                if prod.quantidade < quantidade:
+                                    mensagens_erro.append(
+                                        f'Produto "{prod.nome}" não tem estoque suficiente. Disponível: {prod.quantidade}'
+                                    )
+                                prod.quantidade -= quantidade
+                                prod.save()
+
+                        elif combo.tipo == 'opcional':
+                            # Descontar fixos
+                            for combo_item in combo.itens.all():
+                                prod = combo_item.produto
+                                if prod.quantidade < quantidade:
+                                    mensagens_erro.append(
+                                        f'Produto "{prod.nome}" não tem estoque suficiente. Disponível: {prod.quantidade}'
+                                    )
+                                prod.quantidade -= quantidade
+                                prod.save()
+
+                            # Descontar escolhidos
+                            for escolha_id in escolhas:
+                                prod_escolha = Produto.objects.select_for_update().get(id=escolha_id)
+                                if prod_escolha.quantidade < 1:  # cada escolha equivale a 1 unidade
+                                    mensagens_erro.append(
+                                        f'Produto "{prod_escolha.nome}" não tem estoque suficiente. Disponível: {prod_escolha.quantidade}'
+                                    )
+                                prod_escolha.quantidade -= 1
+                                prod_escolha.save()
+
+                    else:
+                        # Produto comum
+                        if produto.quantidade < quantidade:
+                            mensagens_erro.append(
+                                f'Produto "{produto.nome}" não tem estoque suficiente. Disponível: {produto.quantidade}'
+                            )
+                        produto.quantidade -= quantidade
+                        produto.save()
+
+                    if mensagens_erro:
+                        return JsonResponse({"status": "erro", "mensagens": mensagens_erro}, status=400)
+
+                    # salva o item do pedido com as escolhas específicas
+                    ItemPedido.objects.create(
+                        pedido=pedido,
+                        produto=produto,
+                        quantidade=quantidade,
+                        escolhas_combo=escolhas or None
+                    )
+
 
                 if mensagens_erro:
-                    return JsonResponse({"status": "erro", "mensagens": mensagens_erro})
-
-                pedido = Pedido.objects.create(
-                    cliente=cliente,
-                    metodo_pagamento=metodo_pagamento,
-                    tipo_consumo=tipo_consumo,
-                    observacoes=observacoes
-                )
-
-                for produto_id, quantidade_total in itens_agrupados.items():
-                    produto = Produto.objects.select_for_update().get(id=produto_id)
-                    ItemPedido.objects.create(pedido=pedido, produto=produto, quantidade=quantidade_total)
-                    produto.save()
+                    raise ValueError("Estoque insuficiente em algum item")  # dispara rollback
 
             return JsonResponse({"status": "ok", "pedido_id": pedido.id})
+
 
         except Exception as e:
             import traceback
@@ -196,15 +315,91 @@ class EscolherLocalView(View):
 
         return JsonResponse({"mensagem": "Tipo de consumo salvo com sucesso", "pedido_id": pedido.id})
 
+
 class PagFinalCliente(TemplateView):
-    pedido = Pedido.objects.all()
     template_name = "pag_final_cliente.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         pedido_id = self.kwargs.get("pedido_id")
-        context["pedido"] = get_object_or_404(Pedido, id=pedido_id)
+        pedido = get_object_or_404(Pedido, id=pedido_id)
+        context["pedido"] = pedido
+
+        itens_processados = []
+
+        for item in pedido.itens.all():
+            produto = item.produto
+            quantidade = item.quantidade
+            nome_base = produto.nome
+
+            if hasattr(produto, 'combo'):
+                combo = produto.combo
+
+                if combo.tipo == 'fixo':
+                    nomes_itens_combo = [i.produto.nome for i in combo.itens.all()]
+                    descricao = f"{nome_base} ({', '.join(nomes_itens_combo)})"
+                    itens_processados.append({
+                        'quantidade': quantidade,
+                        'descricao': descricao
+                    })
+
+                elif combo.tipo == 'opcional':
+                    nomes_fixos = [i.produto.nome for i in combo.itens.all()]
+                    escolhas_ids = item.escolhas_combo or []
+
+                    # Verifica quantas categorias de escolha esse combo tem
+                    categorias_das_escolhas = list(
+                        Produto.objects.filter(id__in=escolhas_ids).values_list('categoria', flat=True)
+                    )
+                    categorias_unicas = set(categorias_das_escolhas)
+
+                    # Se mais de uma categoria, separar individualmente
+                    if len(categorias_unicas) > 1:
+                        for escolha_id in escolhas_ids:
+                            nome_escolha = Produto.objects.filter(id=escolha_id).values_list('nome', flat=True).first()
+                            nomes = nomes_fixos.copy()
+                            if nome_escolha:
+                                nomes.append(nome_escolha)
+                            descricao = f"{nome_base} ({', '.join(nomes)})"
+                            itens_processados.append({
+                                'quantidade': 1,
+                                'descricao': descricao
+                            })
+                    else:
+                        # Combo opcional com apenas uma categoria: normal
+                        if len(escolhas_ids) == quantidade:
+                            for escolha_id in escolhas_ids:
+                                nome_escolha = Produto.objects.filter(id=escolha_id).values_list('nome', flat=True).first()
+                                nomes = nomes_fixos.copy()
+                                if nome_escolha:
+                                    nomes.append(nome_escolha)
+                                descricao = f"{nome_base} ({', '.join(nomes)})"
+                                itens_processados.append({
+                                    'quantidade': 1,
+                                    'descricao': descricao
+                                })
+                        else:
+                            # fallback agrupado
+                            nomes_escolhas = list(Produto.objects.filter(id__in=escolhas_ids).values_list('nome', flat=True))
+                            nomes = nomes_fixos + nomes_escolhas
+                            descricao = f"{nome_base} ({', '.join(nomes)})"
+                            itens_processados.append({
+                                'quantidade': quantidade,
+                                'descricao': descricao
+                            })
+
+            else:
+                # Produto comum
+                descricao = nome_base
+                itens_processados.append({
+                    'quantidade': quantidade,
+                    'descricao': descricao
+                })
+
+        context["itens_processados"] = itens_processados
         return context
+
+
 
 @method_decorator(staff_member_required, name='dispatch')
 class CozinhaView(View):
@@ -237,8 +432,9 @@ class CozinhaView(View):
 
                 # Devolver estoque
                 for item in pedido.itens.all():
-                    item.produto.quantidade += item.quantidade
-                    item.produto.save()
+                    # item.produto.quantidade += item.quantidade
+                    # item.produto.save()
+                    devolver_estoque_do_item(item)
 
                 pedido.delete()  # Excluir pedido original
 
@@ -292,8 +488,9 @@ class CaixaView(View):
 
                 # Devolver estoque
                 for item in pedido.itens.all():
-                    item.produto.quantidade += item.quantidade
-                    item.produto.save()
+                    # item.produto.quantidade += item.quantidade
+                    # item.produto.save()
+                    devolver_estoque_do_item(item)
 
                 pedido.delete()
 
@@ -364,6 +561,7 @@ def editar_pedido(request, pedido_id):
     return render(request, 'pag_detalhe_pedido.html', {'pedido': pedido, 'modo_edicao': True})
 
 @staff_member_required
+@staff_member_required
 def pedidos_json(request):
     pedidos = Pedido.objects.filter(liberado_para_cozinha=True).order_by(
         Case(
@@ -377,17 +575,44 @@ def pedidos_json(request):
 
     lista = []
     for pedido in pedidos:
-        itens = [f"{item.produto.nome} ({item.quantidade})" for item in pedido.itens.all()]
+        produtos_finais = []
+
+        for item in pedido.itens.all():
+            produto = item.produto
+            quantidade = item.quantidade
+
+            if hasattr(produto, 'combo'):
+                combo = produto.combo
+                if combo.tipo == 'fixo':
+                    for i in combo.itens.all():
+                        produtos_finais.extend([i.produto.nome] * quantidade)
+                elif combo.tipo == 'opcional':
+                    nomes_fixos = [i.produto.nome for i in combo.itens.all()]
+                    escolhas_ids = item.escolhas_combo or []
+                    escolhas = Produto.objects.filter(id__in=escolhas_ids).values_list('nome', flat=True)
+
+                    produtos_finais.extend(nomes_fixos * quantidade)  # fixos valem 1
+                    produtos_finais.extend(escolhas)  # 1 de cada escolha
+            else:
+                produtos_finais.extend([produto.nome] * quantidade)
+
+        # Agora agrupar os produtos finais
+        contador = Counter(produtos_finais)
+        itens_formatados = [f"{nome} (x{qtd})" for nome, qtd in contador.items()]
+
+
         lista.append({
             'id': pedido.id,
             'cliente': pedido.cliente.nome,
-            'itens': ' | '.join(itens),
+            'itens': itens_formatados,
             'observacoes': pedido.observacoes,
             'tipo_consumo': pedido.tipo_consumo,
         })
 
     return JsonResponse({'pedidos': lista})
 
+
+@staff_member_required
 @staff_member_required
 def pedidos_caixa_json(request):
     pedidos = Pedido.objects.filter(
@@ -397,16 +622,42 @@ def pedidos_caixa_json(request):
 
     lista = []
     for pedido in pedidos:
-        itens_agrupados = defaultdict(int)
-        for item in pedido.itens.all():
-            itens_agrupados[item.produto.nome] += item.quantidade
+        itens_formatados = []
 
-        itens_formatados = [f"{nome} (x{quantidade})" for nome, quantidade in itens_agrupados.items()]
+        for item in pedido.itens.all():
+            produto = item.produto
+            quantidade = item.quantidade
+
+            if hasattr(produto, 'combo'):
+                combo = produto.combo
+                if combo.tipo == 'fixo':
+                    nomes_itens_combo = [i.produto.nome for i in combo.itens.all()]
+                    descricao = f"{produto.nome} ({', '.join(nomes_itens_combo)})"
+                    itens_formatados.append(f"{descricao} (x{quantidade})")
+                elif combo.tipo == 'opcional':
+                    nomes_fixos = [i.produto.nome for i in combo.itens.all()]
+                    escolhas_ids = item.escolhas_combo or []
+                    if escolhas_ids:
+                        escolhas_ids = [int(eid) for eid in escolhas_ids]
+                        for escolha_id in escolhas_ids:
+                            nome_escolha = Produto.objects.filter(id=escolha_id).values_list('nome', flat=True).first()
+                            nomes = nomes_fixos.copy()
+                            if nome_escolha:
+                                nomes.append(nome_escolha)
+                            descricao = f"{produto.nome} ({', '.join(nomes)})"
+                            itens_formatados.append(f"{descricao} (x1)")
+                    else:
+                        descricao = f"{produto.nome} ({', '.join(nomes_fixos)})"
+                        for _ in range(quantidade):
+                            itens_formatados.append(f"{descricao} (x1)")
+            else:
+                descricao = f"{produto.nome}"
+                itens_formatados.append(f"{descricao} (x{quantidade})")
 
         lista.append({
             'id': pedido.id,
             'cliente': pedido.cliente.nome,
-            'itens': ' | '.join(itens_formatados),
+            'itens':itens_formatados,
             'observacoes': pedido.observacoes,
             'metodo_pagamento': pedido.metodo_pagamento,
             'tipo_consumo': pedido.tipo_consumo,
@@ -414,6 +665,7 @@ def pedidos_caixa_json(request):
         })
 
     return JsonResponse({'pedidos': lista})
+
 
 @csrf_exempt
 def cancelar_pedido(request):
@@ -435,8 +687,9 @@ def cancelar_pedido(request):
 
             # Retorna ao estoque
             for item in pedido.itens.all():
-                item.produto.quantidade += item.quantidade
-                item.produto.save()
+                # item.produto.quantidade += item.quantidade
+                # item.produto.save()
+                devolver_estoque_do_item(item)
 
             pedido.delete()
 

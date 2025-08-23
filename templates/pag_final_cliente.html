@@ -162,8 +162,8 @@
 
             <h3>Itens:</h3>
             <ul class="order-items">
-                {% for item in pedido.itens.all %}
-                    <li>{{ item.quantidade }}x {{ item.produto }}</li>
+                {% for item in itens_processados %}
+                    <li>{{ item.quantidade }}x {{ item.descricao }}</li>
                 {% empty %}
                     <li>Nenhum item no pedido.</li>
                 {% endfor %}

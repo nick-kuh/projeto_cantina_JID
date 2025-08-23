@@ -225,7 +225,9 @@
                             <input type="hidden" name="pedido_id" value="${pedido.id}">
                             <div class="order-name">${pedido.cliente}</div>
                             <div class="order-items">
-                                ${pedido.itens}
+                                <ul>
+                                    ${pedido.itens.map(item => `<li>${item}</li>`).join('')}
+                                </ul>
                                 ${pedido.observacoes ? `<span class="order-note">${pedido.observacoes}</span>` : ''}
                             </div>
                             <div class="order-observations"></div>

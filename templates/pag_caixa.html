@@ -175,7 +175,8 @@ button img {
                 <div class="order-name">{{ pedido.cliente.nome }}</div>
                 <div class="order-items">
                     {% for item in pedido.itens.all %}
-                        {{ item.produto.nome }} ({{ item.quantidade }}) | {{ pedido.metodo_pagamento }}
+                        <li>{{ item.produto.nome }} ({{ item.quantidade }})</li>
+                        {{ pedido.metodo_pagamento }}
                     {% endfor %}
                     <span class="order-note">{{ pedido.metodo_pagamento }}</span>
                 </div>
@@ -217,7 +218,9 @@ button img {
                             <input type="hidden" name="pedido_id" value="${pedido.id}">
                             <div class="order-name">${pedido.cliente}</div>
                             <div class="order-items">
-                                ${pedido.itens}
+                                <ul>
+                                    ${pedido.itens.map(item => `<li>${item}</li>`).join('')}
+                                </ul>
                                 ${pedido.metodo_pagamento ? `<span class="order-note">${pedido.metodo_pagamento}</span>` : ''}
                             </div>
                             <div class="order-price">

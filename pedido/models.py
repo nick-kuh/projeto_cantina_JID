@@ -25,6 +25,71 @@ class Produto(models.Model):
         return f"{self.nome}"
 
 
+class Combo(models.Model):
+    produto_ptr = models.OneToOneField(Produto, on_delete=models.CASCADE, related_name='combo')
+    TIPO_COMBO = [
+        ('fixo', 'Fixo'),
+        ('opcional', 'Com opções'),
+    ]
+    tipo = models.CharField(max_length=10, choices=TIPO_COMBO, default='fixo')
+
+    def __str__(self):
+        return f"{self.produto_ptr.nome} ({self.get_tipo_display()})"
+
+    def descricao_itens(self):
+        return " e ".join(
+            [f"{item.produto.nome}" for item in self.itens.all()]
+        )
+    
+    def descricao_completa(self):
+        return f"{self.produto_ptr.nome} ({', '.join([f'{item.quantidade}x {item.produto.nome}' for item in self.itens.all()])})"
+
+    @property
+    def descricao_resumida(self):
+        partes = []
+
+        # Produtos fixos no combo
+        for item in self.itens.all():
+            partes.append(f"{item.produto.nome}")
+
+        # Opções para o cliente escolher
+        for opcao in self.opcoes.all():
+            partes.append(f"escolha alguma opção de {opcao.get_categoria_display()}")
+
+        return ", ".join(partes)
+    
+
+class ItemCombo(models.Model):
+    combo = models.ForeignKey(Combo, on_delete=models.CASCADE, related_name='itens')
+    produto = models.ForeignKey(Produto, on_delete=models.CASCADE)
+    quantidade = models.PositiveIntegerField(default=1)  # ✅ Isso representa quantos do produto vão no combo!
+
+
+    def __str__(self):
+        return f"{self.combo.produto_ptr.nome} - {self.produto.nome}"
+
+
+
+class OpcaoCombo(models.Model):
+    combo = models.ForeignKey(Combo, on_delete=models.CASCADE, related_name='opcoes')
+    categoria = models.CharField(max_length=20, choices=Produto.CATEGORIAS)
+
+    def __str__(self):
+        return f"{self.combo} - Escolha 1 de {self.get_categoria_display()}"
+
+    def validar_escolhas_opcionais(self, escolhas: dict):
+        """
+        escolhas = {'Bebidas': produto_id, 'Salgados': produto_id}
+        """
+        for opcao in self.combo.opcoes.all():
+            produto_id = escolhas.get(opcao.categoria)
+            if not produto_id:
+                raise ValueError(f"Escolha de {opcao.get_categoria_display()} não fornecida.")
+            produto = Produto.objects.get(id=produto_id)
+            if produto.quantidade < 1:
+                raise ValueError(f"Produto {produto.nome} sem estoque.")
+
+
 class Pedido(models.Model):
 
     FORMA_PAGAMENTO = [
@@ -68,6 +133,7 @@ class ItemPedido(models.Model):
     pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name='itens')
     produto = models.ForeignKey(Produto, on_delete=models.CASCADE)
     quantidade = models.IntegerField(default=0)
+    escolhas_combo = models.JSONField(null=True, blank=True)  # 👈 Salva os produtos escolhidos no combo
 
     def __str__(self):
         return f"{self.quantidade}x {self.produto.nome} -> {self.pedido.cliente}"
@@ -79,21 +145,41 @@ class ItemPedido(models.Model):
         else:
             diferenca = self.quantidade
 
-        if diferenca > self.produto.quantidade:
-            raise ValueError(f"Estoque insuficiente para {self.produto.nome}. Disponível: {self.produto.quantidade}")
-
-        self.produto.quantidade -= diferenca
-        self.produto.save()
+        combo = getattr(self.produto, 'combo', None)
+        if combo and combo.tipo == 'fixo':
+            for item_combo in combo.itens.all():
+                produto_estoque = item_combo.produto
+                total_a_abater = item_combo.quantidade * diferenca
+                if produto_estoque.quantidade < total_a_abater:
+                    raise ValueError(f"Estoque insuficiente para {produto_estoque.nome}")
+                # produto_estoque.quantidade -= total_a_abater
+                produto_estoque.save()
+        else:
+            if diferenca > self.produto.quantidade:
+                raise ValueError(f"Estoque insuficiente para {self.produto.nome}")
+            # self.produto.quantidade -= diferenca
+            self.produto.save()
 
         super().save(*args, **kwargs)
         self.pedido.atualizar_total()
 
 
     def delete(self, *args, **kwargs):
-        self.produto.quantidade += self.quantidade  # Devolve a quantidade ao estoque ao excluir
-        self.produto.save()
-        super().delete(*args, **kwargs)  # Remove o item primeiro
-        self.pedido.atualizar_total()  # Atualiza o total do pedido após excluir o item
+        # self.produto.quantidade += self.quantidade  # Devolve a quantidade ao estoque ao excluir
+        # self.produto.save()
+        # super().delete(*args, **kwargs)  # Remove o item primeiro
+        # self.pedido.atualizar_total()  # Atualiza o total do pedido após excluir o item
+        if hasattr(self.produto, 'combo') and self.produto.combo.tipo == 'fixo':
+            combo = self.produto.combo
+            for item_combo in combo.itens.all():
+                item_combo.produto.quantidade += item_combo.quantidade * self.quantidade
+                item_combo.produto.save()
+        else:
+            self.produto.quantidade += self.quantidade
+            self.produto.save()
+
+        super().delete(*args, **kwargs)
+        self.pedido.atualizar_total()
 
 class PedidoEntregue(models.Model):
     cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE)

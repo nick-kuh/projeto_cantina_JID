@@ -107,7 +107,7 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('DB_NAME','Cantina JID - 2'),  
+            'NAME': os.getenv('DB_NAME','Cantina JID - 3'),  
             'USER': os.getenv('DB_USER','postgres'),  
             'PASSWORD': os.getenv('DB_PASSWORD','databaseNick'), 
             'HOST': os.getenv('DB_HOST', 'localhost'),
