@@ -143,13 +143,13 @@ class ItemPedido(models.Model):
     pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name='itens')
     produto = models.ForeignKey(Produto, on_delete=models.CASCADE)
     quantidade = models.IntegerField(default=0)
-    escolhas_combo = models.JSONField(null=True, blank=True)  # 👈 Salva os produtos escolhidos no combo
+    escolhas_combo = models.JSONField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.quantidade}x {self.produto.nome} -> {self.pedido.cliente}"
-    
+
     def save(self, *args, **kwargs):
-        if self.pk:  
+        if self.pk:
             item_antigo = ItemPedido.objects.get(pk=self.pk)
             diferenca = self.quantidade - item_antigo.quantidade
         else:
@@ -157,31 +157,53 @@ class ItemPedido(models.Model):
 
         combo = getattr(self.produto, 'combo', None)
 
-        if combo and combo.tipo == 'fixo':
-            # Se for combo fixo, desconta o estoque de cada item do combo
+        if combo:
+            # 🔹 Sempre processa os itens fixos primeiro
             for item_combo in combo.itens.all():
                 produto_estoque = item_combo.produto
                 total_a_abater = item_combo.quantidade * diferenca
 
-                if produto_estoque.quantidade < total_a_abater:
-                    raise ValueError(f"Estoque insuficiente para {produto_estoque.nome}")
+                if total_a_abater > 0:
+                    if produto_estoque.quantidade < total_a_abater:
+                        raise ValueError(
+                            f"Estoque insuficiente para {produto_estoque.nome}. "
+                            f"Disponível: {produto_estoque.quantidade}, necessário: {total_a_abater}"
+                        )
+                    produto_estoque.quantidade -= total_a_abater
+                elif total_a_abater < 0:
+                    produto_estoque.quantidade += abs(total_a_abater)
 
-                produto_estoque.quantidade -= total_a_abater
                 produto_estoque.save()
 
+            # 🔹 Depois processa os opcionais (se houver)
+            if combo.tipo == 'opcional' and self.escolhas_combo:
+                escolhas_ids = [int(eid) for eid in (self.escolhas_combo or [])]
+                for escolha_id in escolhas_ids:
+                    produto_escolha = Produto.objects.get(id=escolha_id)
+
+                    if diferenca > 0:
+                        if produto_escolha.quantidade < diferenca:
+                            raise ValueError(f"Estoque insuficiente para {produto_escolha.nome}")
+                        produto_escolha.quantidade -= diferenca
+                    elif diferenca < 0:
+                        produto_escolha.quantidade += abs(diferenca)
+
+                    produto_escolha.save()
+
         else:
-            # Produto normal (ou combo opcional tratado como produto principal)
-            if diferenca > 0:  # só desconta se estiver adicionando
+            # Produto normal
+            if diferenca > 0:
                 if self.produto.quantidade < diferenca:
                     raise ValueError(f"Estoque insuficiente para {self.produto.nome}")
                 self.produto.quantidade -= diferenca
-                self.produto.save()
-            elif diferenca < 0:  # devolve estoque se reduzir quantidade
+            elif diferenca < 0:
                 self.produto.quantidade += abs(diferenca)
-                self.produto.save()
+            self.produto.save()
 
         super().save(*args, **kwargs)
         self.pedido.atualizar_total()
+
+
 
 
     def delete(self, *args, **kwargs):
