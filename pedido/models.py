@@ -58,6 +58,16 @@ class Combo(models.Model):
 
         return ", ".join(partes)
     
+    def disponivel(self, quantidade=1):
+        """
+        Verifica se é possível montar este combo na quantidade desejada.
+        """
+        for item in self.itens.all():
+            necessario = quantidade * item.quantidade
+            if item.produto.quantidade < necessario:
+                return False
+        return True
+    
 
 class ItemCombo(models.Model):
     combo = models.ForeignKey(Combo, on_delete=models.CASCADE, related_name='itens')
@@ -146,19 +156,29 @@ class ItemPedido(models.Model):
             diferenca = self.quantidade
 
         combo = getattr(self.produto, 'combo', None)
+
         if combo and combo.tipo == 'fixo':
+            # Se for combo fixo, desconta o estoque de cada item do combo
             for item_combo in combo.itens.all():
                 produto_estoque = item_combo.produto
                 total_a_abater = item_combo.quantidade * diferenca
+
                 if produto_estoque.quantidade < total_a_abater:
                     raise ValueError(f"Estoque insuficiente para {produto_estoque.nome}")
-                # produto_estoque.quantidade -= total_a_abater
+
+                produto_estoque.quantidade -= total_a_abater
                 produto_estoque.save()
+
         else:
-            if diferenca > self.produto.quantidade:
-                raise ValueError(f"Estoque insuficiente para {self.produto.nome}")
-            # self.produto.quantidade -= diferenca
-            self.produto.save()
+            # Produto normal (ou combo opcional tratado como produto principal)
+            if diferenca > 0:  # só desconta se estiver adicionando
+                if self.produto.quantidade < diferenca:
+                    raise ValueError(f"Estoque insuficiente para {self.produto.nome}")
+                self.produto.quantidade -= diferenca
+                self.produto.save()
+            elif diferenca < 0:  # devolve estoque se reduzir quantidade
+                self.produto.quantidade += abs(diferenca)
+                self.produto.save()
 
         super().save(*args, **kwargs)
         self.pedido.atualizar_total()

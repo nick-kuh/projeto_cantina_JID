@@ -10,7 +10,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.utils.decorators import method_decorator
 import pandas as pd 
 import json
-from django.db.models import Case, When, Value, IntegerField
+from django.db.models import Case, When, Value, IntegerField, Min
 from django.utils import timezone
 from datetime import datetime
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -74,6 +74,30 @@ def devolver_estoque_do_item(item):
         produto.save()
 
 
+# def combos_disponiveis():
+#     combos_validos = []
+#     # Prefetch para evitar consultas extras
+#     for combo in Combo.objects.prefetch_related("itens__produto"):
+#         disponivel = True
+#         for item in combo.itens.all():
+#             print(item.produto.nome, item.produto.quantidade, item.quantidade)
+
+#             # precisa ter pelo menos a quantidade necessária do item
+#             if item.produto.quantidade <  item.quantidade:  # se faltar, não dá
+#                 print("entrou aqui")
+#                 disponivel = False
+#                 break
+#         if disponivel:
+#             combos_validos.append(combo)
+#     return combos_validos
+
+def combos_disponiveis():
+    combos = Combo.objects.prefetch_related("itens__produto")
+    return [combo for combo in combos if combo.disponivel()]
+
+
+
+
 class PagCliente(ListView):
     template_name = "pag_cliente.html"
     model = Produto  
@@ -85,10 +109,14 @@ class PagCliente(ListView):
         cliente = get_object_or_404(Cliente, id=cliente_id)
         context['cliente'] = cliente
 
+        # pega só produtos com estoque
         produtos = Produto.objects.filter(quantidade__gt=0).order_by('nome')
 
+        # pega combos que só têm itens com estoque suficiente
+        combos = combos_disponiveis()
+
         # Ordem desejada
-        ordem_desejada = ["Combos", 'Caldos', 'Salgados', 'Doces', 'Bebidas']
+        ordem_desejada = ["Combos", "Caldos", "Salgados", "Doces", "Bebidas"]
 
         # Agrupar produtos por categoria válida
         categorias_dict = defaultdict(list)
@@ -98,6 +126,10 @@ class PagCliente(ListView):
                 if categoria in ordem_desejada:
                     categorias_dict[categoria].append(produto)
 
+        # Inserir os combos manualmente na categoria "Combos"
+        if combos:
+            categorias_dict["Combos"] = [c.produto_ptr for c in combos]
+
         # Criar dict ordenado manualmente
         categorias_produtos = OrderedDict()
         for cat in ordem_desejada:
@@ -106,6 +138,7 @@ class PagCliente(ListView):
 
         context['categorias_produtos'] = categorias_produtos.items()
 
+        # Opções de combos opcionais
         combos_opcionais = Combo.objects.filter(tipo='opcional')
         opcoes_json = {}
 
@@ -124,7 +157,6 @@ class PagCliente(ListView):
                 })
 
             opcoes_json[combo.produto_ptr.id] = opcoes  # ✅ Fora do for interno
-
 
         context['opcoes_json'] = json.dumps(opcoes_json, cls=DjangoJSONEncoder)
         return context
@@ -158,51 +190,7 @@ class PagCliente(ListView):
             with transaction.atomic():
                 cliente = get_object_or_404(Cliente, id=cliente_id)
 
-                # 1. Verifica estoque antes
-                for item in itens:
-                    produto_id = item.get("produto_id")
-                    quantidade = item.get("quantidade")
-
-                    produto = Produto.objects.select_for_update().get(id=produto_id)
-
-                    if produto.quantidade < quantidade:
-                        mensagens_erro.append(
-                            f'Produto "{produto.nome}" não tem estoque suficiente. Disponível: {produto.quantidade}'
-                        )
-
-                if mensagens_erro:
-                    return JsonResponse({"status": "erro", "mensagens": mensagens_erro})
-
-                pedido = Pedido.objects.create(
-                    cliente=cliente,
-                    metodo_pagamento=metodo_pagamento,
-                    tipo_consumo=tipo_consumo,
-                    observacoes=observacoes
-                )
-
-                # for item in itens:
-                #     produto_id = item.get("produto_id")
-                #     quantidade = item.get("quantidade", 1)
-                #     escolhas = item.get("escolhas", [])
-
-                #     produto = Produto.objects.select_for_update().get(id=produto_id)
-
-                #     if produto.quantidade < quantidade:
-                #         mensagens_erro.append(
-                #             f'Produto "{produto.nome}" não tem estoque suficiente. Disponível: {produto.quantidade}'
-                #         )
-
-                #     # salva o item do pedido com as escolhas específicas
-                #     ItemPedido.objects.create(
-                #         pedido=pedido,
-                #         produto=produto,
-                #         quantidade=quantidade,
-                #         escolhas_combo=escolhas or None
-                #     )
-
-                    # produto.quantidade -= quantidade
-                    # produto.save()
-
+                # 1. Verifica estoque (continua igual, apenas conferindo)
                 for item in itens:
                     produto_id = item.get("produto_id")
                     quantidade = item.get("quantidade", 1)
@@ -210,54 +198,48 @@ class PagCliente(ListView):
 
                     produto = Produto.objects.select_for_update().get(id=produto_id)
 
-                    if hasattr(produto, 'combo'):  
-                        combo = produto.combo  
+                    if hasattr(produto, 'combo'):
+                        combo = produto.combo
 
-                        if combo.tipo == 'fixo':
-                            # Descontar todos os itens fixos do combo
-                            for combo_item in combo.itens.all():
-                                prod = combo_item.produto
-                                if prod.quantidade < quantidade:
-                                    mensagens_erro.append(
-                                        f'Produto "{prod.nome}" não tem estoque suficiente. Disponível: {prod.quantidade}'
-                                    )
-                                prod.quantidade -= quantidade
-                                prod.save()
+                        if not combo.disponivel(quantidade):
+                            mensagens_erro.append(
+                                f'Combo "{combo.produto_ptr.nome}" não tem estoque suficiente para {quantidade} unidade(s).'
+                            )
 
-                        elif combo.tipo == 'opcional':
-                            # Descontar fixos
-                            for combo_item in combo.itens.all():
-                                prod = combo_item.produto
-                                if prod.quantidade < quantidade:
-                                    mensagens_erro.append(
-                                        f'Produto "{prod.nome}" não tem estoque suficiente. Disponível: {prod.quantidade}'
-                                    )
-                                prod.quantidade -= quantidade
-                                prod.save()
-
-                            # Descontar escolhidos
+                        if combo.tipo == 'opcional':
                             for escolha_id in escolhas:
                                 prod_escolha = Produto.objects.select_for_update().get(id=escolha_id)
-                                if prod_escolha.quantidade < 1:  # cada escolha equivale a 1 unidade
+                                if prod_escolha.quantidade < quantidade:
                                     mensagens_erro.append(
-                                        f'Produto "{prod_escolha.nome}" não tem estoque suficiente. Disponível: {prod_escolha.quantidade}'
+                                        f'Produto "{prod_escolha.nome}" não tem estoque suficiente. '
+                                        f'Disponível: {prod_escolha.quantidade}, necessário: {quantidade}'
                                     )
-                                prod_escolha.quantidade -= 1
-                                prod_escolha.save()
-
                     else:
-                        # Produto comum
                         if produto.quantidade < quantidade:
                             mensagens_erro.append(
-                                f'Produto "{produto.nome}" não tem estoque suficiente. Disponível: {produto.quantidade}'
+                                f'Produto "{produto.nome}" não tem estoque suficiente. '
+                                f'Disponível: {produto.quantidade}, necessário: {quantidade}'
                             )
-                        produto.quantidade -= quantidade
-                        produto.save()
 
-                    if mensagens_erro:
-                        return JsonResponse({"status": "erro", "mensagens": mensagens_erro}, status=400)
+                if mensagens_erro:
+                    return JsonResponse({"status": "erro", "mensagens": mensagens_erro})
 
-                    # salva o item do pedido com as escolhas específicas
+                # 2. Cria pedido
+                pedido = Pedido.objects.create(
+                    cliente=cliente,
+                    metodo_pagamento=metodo_pagamento,
+                    tipo_consumo=tipo_consumo,
+                    observacoes=observacoes
+                )
+
+                # 3. Cria itens (o save do ItemPedido vai cuidar do estoque)
+                for item in itens:
+                    produto_id = item.get("produto_id")
+                    quantidade = item.get("quantidade", 1)
+                    escolhas = item.get("escolhas", [])
+
+                    produto = Produto.objects.get(id=produto_id)
+
                     ItemPedido.objects.create(
                         pedido=pedido,
                         produto=produto,
@@ -265,17 +247,13 @@ class PagCliente(ListView):
                         escolhas_combo=escolhas or None
                     )
 
-
-                if mensagens_erro:
-                    raise ValueError("Estoque insuficiente em algum item")  # dispara rollback
-
             return JsonResponse({"status": "ok", "pedido_id": pedido.id})
-
 
         except Exception as e:
             import traceback
             print(traceback.format_exc())
             return JsonResponse({"status": "erro", "mensagens": [str(e)]}, status=500)
+
 
 class EscolherLocalView(View):
     template_name = "pag_escolher_local.html"
@@ -637,19 +615,19 @@ def pedidos_caixa_json(request):
                 elif combo.tipo == 'opcional':
                     nomes_fixos = [i.produto.nome for i in combo.itens.all()]
                     escolhas_ids = item.escolhas_combo or []
+
+                    nomes = nomes_fixos.copy()
+
                     if escolhas_ids:
                         escolhas_ids = [int(eid) for eid in escolhas_ids]
-                        for escolha_id in escolhas_ids:
-                            nome_escolha = Produto.objects.filter(id=escolha_id).values_list('nome', flat=True).first()
-                            nomes = nomes_fixos.copy()
-                            if nome_escolha:
-                                nomes.append(nome_escolha)
-                            descricao = f"{produto.nome} ({', '.join(nomes)})"
-                            itens_formatados.append(f"{descricao} (x1)")
-                    else:
-                        descricao = f"{produto.nome} ({', '.join(nomes_fixos)})"
-                        for _ in range(quantidade):
-                            itens_formatados.append(f"{descricao} (x1)")
+                        nomes_escolhas = list(
+                            Produto.objects.filter(id__in=escolhas_ids).values_list('nome', flat=True)
+                        )
+                        nomes.extend(nomes_escolhas)
+
+                    descricao = f"{produto.nome} ({', '.join(nomes)})"
+                    itens_formatados.append(f"{descricao} (x{quantidade})")
+
             else:
                 descricao = f"{produto.nome}"
                 itens_formatados.append(f"{descricao} (x{quantidade})")

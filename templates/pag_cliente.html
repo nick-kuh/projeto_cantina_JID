@@ -587,7 +587,9 @@
             }
 
             let cliente_id = document.querySelector('input[name="cliente_id"]').value;
-            const csrftoken = document.querySelector('[name=csrf-token]').content;
+            // const csrftoken = document.querySelector('[name=csrf-token]').content;
+            const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
 
             // É importante que `dadosPedido` seja definido aqui se você o usa no `localStorage.setItem` no caso de sucesso.
             // No seu código original, `dadosPedido` era definido antes do fetch, o que é bom.
@@ -596,6 +598,13 @@
                 metodo_pagamento: metodo_pagamento,
                 itens: pedido
             };
+
+            let mapaNomesProdutos = {};
+            pedido.forEach(item => {
+                let nome = document.querySelector(`.item[data-id="${item.produto_id}"]`).getAttribute("data-nome");
+                mapaNomesProdutos[item.produto_id] = nome;
+            });
+
 
             fetch(`/pedido/${cliente_id}/`, {
                 method: 'POST',
@@ -613,7 +622,8 @@
                     metodo_pagamento: metodo_pagamento,
                     tipo_consumo: 'local',  // ou 'viagem' - você pode querer tornar isso dinâmico
                     observacoes: "", // você pode querer coletar isso do usuário
-                    itens: pedido
+                    itens: pedido,
+                    escolhas_combo: escolhaCombo  // <-- isso
                 })
             })
             .then(response => response.json())
@@ -621,17 +631,23 @@
                 if (data.status === "ok") {
                     localStorage.setItem("pedidoData", JSON.stringify(dadosPedidoParaLocalStorage));
                     window.location.href = `/pedido/${cliente_id}/escolher-local/`;
-                    // Não é necessário reabilitar o botão aqui, pois a página será redirecionada.
                 } else {
-                    if (Array.isArray(data.mensagens)) {
-                        alert("Erro no pedido:\n\n" + data.mensagens.join("\n"));
-                    } else {
-                        alert("Erro inesperado ao processar o pedido.");
+                    let mensagem = data.mensagens[0];
+                    if (mensagem.includes('"pedido_produto"')) {
+                        // Substitui manualmente por um nome real
+                        const nomeReal = document.querySelector(`.item[data-id]`).getAttribute("data-nome"); // pega o primeiro produto como fallback
+                        mensagem = `O produto "${nomeReal}" está com estoque insuficiente. 1`;
                     }
-                    sendButton.disabled = false; // Reabilitar em caso de erro do servidor
+
+                    alert("Erro no pedido:\n\n" + mensagem);
+
+
+
+                    sendButton.disabled = false;
                     sendButton.textContent = 'Continuar';
                 }
             })
+
             .catch(error => {
                 console.error("Erro ao enviar pedido: ", error);
                 // alert("Erro ao validar o pedido. Tente novamente. Parece que o pedido já foi finalizado ou não existe.");
