@@ -329,6 +329,36 @@
             margin-top: 8px;
         }
 
+        #lista-escolhas-remover {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+        }
+
+            .grupo-combo {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 6px;
+            padding: 6px;
+        }
+
+            .grupo-combo .card {
+            width: 80px;   /* largura fixa menor */
+            text-align: center;
+        }
+
+            .grupo-combo .card img {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
+
+            .grupo-combo .card-nome {
+            font-size: 13px;
+            margin-top: 4px;
+        }
+
 
 
     </style>
@@ -354,7 +384,7 @@
                 data-id="{{ produto.id }}"
                 data-estoque="{{ produto.quantidade }}"
                 data-nome="{{ produto.nome }}"
-                {% if produto.combo and produto.combo.tipo == "opcional" %} data-combo-opcional="true" {% endif %}>
+                {% if produto.combo and produto.combo.tipo == "opcional" or produto.combo.tipo == "fixo_opcional" %} data-combo-opcional="true" {% endif %}>
                 
                 <img src="{{ produto.imagem.url }}" alt="Imagem do produto">
                 
@@ -371,7 +401,7 @@
 
                     <div class="price-quantity">
                         <div class="price">R$ {{ produto.preco }}</div>
-                        {% if produto.combo and produto.combo.tipo == "opcional" %}
+                        {% if produto.combo and produto.combo.tipo == "opcional" or produto.combo.tipo == "fixo_opcional" %}
                             <div class="quantity">
                                 <button onclick="changeQuantity('{{ produto.id }}', -1, true)">-</button>
                                 <span id="{{ produto.id }}">0</span>
@@ -556,11 +586,26 @@
                         };
 
                         // Adiciona escolhas se existirem
+                        // if (escolhaCombo[produto_id]) {
+                        //     itemPedido.escolhas = escolhaCombo[produto_id].flat();
+                        // }
                         if (escolhaCombo[produto_id]) {
-                            itemPedido.escolhas = escolhaCombo[produto_id];
+                            escolhaCombo[produto_id].forEach(grupo => {
+                                pedido.push({
+                                    produto_id: produto_id,
+                                    quantidade: 1,
+                                    escolhas: grupo
+                                });
+                            });
+                        } else {
+                            pedido.push({
+                                produto_id: produto_id,
+                                quantidade: quantidade
+                            });
                         }
 
-                        pedido.push(itemPedido);
+
+                        // pedido.push(itemPedido);
                     }
                 }
             });
@@ -771,6 +816,7 @@
             document.getElementById("modalOpcaoCombo").style.display = "flex";
         }
 
+        let escolhasTemp = []; // itens da escolha atual
 
         function confirmarProdutoCombo() {
             const selected = document.querySelector('input[name="opcaoCombo"]:checked');
@@ -780,57 +826,52 @@
             }
 
             const produtoEscolhidoId = parseInt(selected.value);
-
-            if (!escolhaCombo[comboAtualId]) {
-                escolhaCombo[comboAtualId] = [];
-            }
-
-            escolhaCombo[comboAtualId].push(produtoEscolhidoId);
+            escolhasTemp.push(produtoEscolhidoId);
 
             indiceCategoriaAtual++;
 
             if (indiceCategoriaAtual < opcoesComboAtual.length) {
-                mostrarCategoriaAtual(); // Próxima categoria
+                mostrarCategoriaAtual(); // próxima categoria
             } else {
-                // Finalizou todas as categorias
+                // Finalizou TODAS as categorias do combo
+                if (!escolhaCombo[comboAtualId]) {
+                    escolhaCombo[comboAtualId] = [];
+                }
+                escolhaCombo[comboAtualId].push(escolhasTemp); // salva o combo como grupo
+                escolhasTemp = []; // reseta temporário
+
                 const quantityElement = document.getElementById(comboAtualId);
                 quantityElement.textContent = parseInt(quantityElement.textContent) + 1;
+
                 document.getElementById("modalOpcaoCombo").style.display = "none";
                 atualizarDescricaoCombo(comboAtualId);
                 updateTotal();
             }
         }
 
+
         function atualizarDescricaoCombo(comboId) {
-            const opcoes = opcoesPorCombo[comboId];
-            if (!opcoes || opcoes.length === 0) return;
-
-            const produtosSelecionados = escolhaCombo[comboId] || [];
-
-            // console.log(produto_fixo)
-
+            const grupos = escolhaCombo[comboId] || [];
             let descricoes = [];
 
-            opcoes.forEach(categoria => {
-                const nomes = produtosSelecionados
-                    .map(id => {
+            grupos.forEach((grupo, i) => {
+                let nomes = [];
+                grupo.forEach(id => {
+                    for (let categoria of opcoesPorCombo[comboId]) {
                         const prod = categoria.produtos.find(p => p.id === id);
-                        return prod ? prod.nome : null;
-                    })
-                    .filter(Boolean);
-
-                if (nomes.length > 0) {
-                    descricoes.push(`${categoria.categoria_nome}: ${nomes.join(", ")}`);
-                }
-                // else if (nomes.length > 1) {
-                //     descricoes.push(`${categoria.categoria_nome}: ${nomes.join(", ")}`);
-                // }
+                        if (prod) {
+                            nomes.push(prod.nome);
+                            break;
+                        }
+                    }
+                });
+                descricoes.push(`Combo ${i + 1}: ${nomes.join(" + ")}`);
             });
 
             const descricaoDiv = document.getElementById(`descricao-combo-${comboId}`);
             if (descricaoDiv) {
                 if (descricoes.length > 0) {
-                    descricaoDiv.textContent = `Escolhas: ${descricoes.join(" | ")}`;
+                    descricaoDiv.textContent = descricoes.join(" | ");
                 } else {
                     descricaoDiv.textContent = `Escolha as opções do combo`;
                 }
@@ -840,32 +881,75 @@
 
         function mostrarModalRemoverEscolha(comboId) {
             const escolhas = escolhaCombo[comboId] || [];
-            const opcoes = opcoesPorCombo[comboId][0].produtos;
             const container = document.getElementById("lista-escolhas-remover");
 
             container.innerHTML = "";
-            indiceEscolhaRemover = null; // reseta a seleção anterior
+            indiceEscolhaRemover = null;
 
-            escolhas.forEach((id, index) => {
-                const prod = opcoes.find(p => p.id === id);
-                if (prod) {
-                    const div = document.createElement("div");
-                    div.className = "combo-option";
-                    div.innerHTML = `
-                        <label class="combo-option">
-                            <input type="radio" name="removerEscolha" value="${index}">
-                            <div class="card">
-                                <img src="${prod.imagem_url}" alt="${prod.nome}">
-                                <div class="card-nome">${prod.nome}</div>
-                            </div>
-                        </label>
-                    `;
-                    container.appendChild(div);
-                }
+            escolhas.forEach((grupo, index) => {
+                // grupo = [5, 8] (Coxinha + Chocolate Quente)
+                let html = `<label class="combo-option">
+                                <input type="radio" name="removerEscolha" value="${index}">
+                                <div class="grupo-combo">`;
+
+                grupo.forEach(id => {
+                    let prod = null;
+                    for (let categoria of opcoesPorCombo[comboId]) {
+                        prod = categoria.produtos.find(p => p.id === id);
+                        if (prod) {
+                            html += `
+                                <div class="card">
+                                    <img src="${prod.imagem_url}" alt="${prod.nome}">
+                                    <div class="card-nome">${prod.nome}</div>
+                                </div>`;
+                            break;
+                        }
+                    }
+                });
+
+                html += `   </div>
+                            </label>`;
+
+                container.innerHTML += html;
             });
 
             document.getElementById("modalRemoverCombo").style.display = "flex";
         }
+
+        function mostrarModalRemoverEscolha(comboId) {
+            const escolhas = escolhaCombo[comboId] || [];
+            const container = document.getElementById("lista-escolhas-remover");
+
+            container.innerHTML = "";
+
+            escolhas.forEach((grupo, index) => {
+                let html = `
+                    <label class="grupo-combo-option">
+                        <input type="radio" name="removerEscolha" value="${index}">
+                        <div class="grupo-combo">`;
+
+                grupo.forEach(id => {
+                    let prod = null;
+                    for (let categoria of opcoesPorCombo[comboId]) {
+                        prod = categoria.produtos.find(p => p.id === id);
+                        if (prod) {
+                            html += `
+                                <div class="card">
+                                    <img src="${prod.imagem_url}" alt="${prod.nome}">
+                                    <div class="card-nome">${prod.nome}</div>
+                                </div>`;
+                            break;
+                        }
+                    }
+                });
+
+                html += `</div></label>`;
+                container.innerHTML += html;
+            });
+
+            document.getElementById("modalRemoverCombo").style.display = "flex";
+        }
+
 
         function removerEscolhaCombo(comboId, index) {
             if (escolhaCombo[comboId]) {
@@ -888,15 +972,17 @@
             const index = parseInt(selecionado.value);
 
             if (escolhaCombo[comboAtualId]) {
-                escolhaCombo[comboAtualId].splice(index, 1);
+                escolhaCombo[comboAtualId].splice(index, 1); // remove o grupo inteiro
+
                 const quantityElement = document.getElementById(comboAtualId);
                 quantityElement.textContent = parseInt(quantityElement.textContent) - 1;
+
                 atualizarDescricaoCombo(comboAtualId);
                 document.getElementById("modalRemoverCombo").style.display = "none";
                 updateTotal();
-                // fecharModalRemover(); // ISSO JÁ ESTÁ CERTO
             }
         }
+
 
 
 

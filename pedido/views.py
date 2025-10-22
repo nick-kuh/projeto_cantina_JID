@@ -8,6 +8,7 @@ from django.db import transaction
 from django.utils.formats import number_format
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils.decorators import method_decorator
+from django.views.decorators.http import require_POST
 import pandas as pd 
 import json
 from django.db.models import Case, When, Value, IntegerField, Min
@@ -73,30 +74,48 @@ def devolver_estoque_do_item(item):
         produto.quantidade += quantidade
         produto.save()
 
-
-# def combos_disponiveis():
-#     combos_validos = []
-#     # Prefetch para evitar consultas extras
-#     for combo in Combo.objects.prefetch_related("itens__produto"):
-#         disponivel = True
-#         for item in combo.itens.all():
-#             print(item.produto.nome, item.produto.quantidade, item.quantidade)
-
-#             # precisa ter pelo menos a quantidade necessária do item
-#             if item.produto.quantidade <  item.quantidade:  # se faltar, não dá
-#                 print("entrou aqui")
-#                 disponivel = False
-#                 break
-#         if disponivel:
-#             combos_validos.append(combo)
-#     return combos_validos
-
 def combos_disponiveis():
     combos = Combo.objects.prefetch_related("itens__produto")
     return [combo for combo in combos if combo.disponivel()]
 
+def itempedido_para_json(item):
+    produto = item.produto
+    dados = {
+        "id": item.id,
+        "nome": produto.nome,
+        "imagem_url": produto.imagem.url if produto.imagem else "",
+        "itens": []
+    }
 
+    if hasattr(produto, "combo") and produto.combo.tipo == "opcional":
+        # Adiciona os produtos fixos do combo
+        for combo_item in produto.combo.itens.all():
+            p = combo_item.produto
+            dados["itens"].append({
+                "id": p.id,
+                "nome": p.nome,
+                "imagem_url": p.imagem.url if p.imagem else ""
+            })
 
+        # Adiciona as escolhas feitas
+        for escolha_id in item.escolhas_combo or []:
+            p = Produto.objects.get(id=escolha_id)
+            dados["itens"].append({
+                "id": p.id,
+                "nome": p.nome,
+                "imagem_url": p.imagem.url if p.imagem else ""
+            })
+
+    return dados
+
+@require_POST
+def detalhes_item_para_remocao(request, item_id):
+    try:
+        item = ItemPedido.objects.get(id=item_id)
+        dados_item = itempedido_para_json(item)
+        return JsonResponse({"status": "ok", "item": dados_item})
+    except ItemPedido.DoesNotExist:
+        return JsonResponse({"status": "erro", "mensagem": "Item não encontrado"})
 
 class PagCliente(ListView):
     template_name = "pag_cliente.html"
@@ -139,7 +158,8 @@ class PagCliente(ListView):
         context['categorias_produtos'] = categorias_produtos.items()
 
         # Opções de combos opcionais
-        combos_opcionais = Combo.objects.filter(tipo='opcional')
+        # pega combos que têm opções (opcional ou fixo_opcional)
+        combos_opcionais = Combo.objects.filter(tipo__in=['opcional', 'fixo_opcional'])
         opcoes_json = {}
 
         for combo in combos_opcionais:
@@ -156,7 +176,8 @@ class PagCliente(ListView):
                     } for p in produtos]
                 })
 
-            opcoes_json[combo.produto_ptr.id] = opcoes  # ✅ Fora do for interno
+            opcoes_json[combo.produto_ptr.id] = opcoes
+
 
         context['opcoes_json'] = json.dumps(opcoes_json, cls=DjangoJSONEncoder)
         return context
@@ -201,19 +222,36 @@ class PagCliente(ListView):
                     if hasattr(produto, 'combo'):
                         combo = produto.combo
 
+                        combo.refresh_from_db()
                         if not combo.disponivel(quantidade):
                             mensagens_erro.append(
                                 f'Combo "{combo.produto_ptr.nome}" não tem estoque suficiente para {quantidade} unidade(s).'
                             )
 
-                        if combo.tipo == 'opcional':
-                            for escolha_id in escolhas:
-                                prod_escolha = Produto.objects.select_for_update().get(id=escolha_id)
-                                if prod_escolha.quantidade < quantidade:
-                                    mensagens_erro.append(
-                                        f'Produto "{prod_escolha.nome}" não tem estoque suficiente. '
-                                        f'Disponível: {prod_escolha.quantidade}, necessário: {quantidade}'
-                                    )
+                        if combo.tipo in ['opcional', 'fixo_opcional']:
+                            # Para cada unidade pedida, precisamos garantir que exista alguém para cada escolha
+                            # Aqui assumimos que cliente envia 'escolhas' como lista adequada (ver front-end)
+                            # Se 'escolhas' vier agrupado (grupos por combo) faça a validação por grupo
+                            if isinstance(escolhas, list) and any(isinstance(e, list) for e in escolhas):
+                                # listas de grupos: validar cada produto escolhido
+                                for grupo in escolhas:
+                                    for escolha_id in grupo:
+                                        prod_escolha = Produto.objects.select_for_update().get(id=escolha_id)
+                                        if prod_escolha.quantidade < 1:
+                                            mensagens_erro.append(
+                                                f'Produto "{prod_escolha.nome}" não tem estoque suficiente. '
+                                                f'Disponível: {prod_escolha.quantidade}, necessário: 1'
+                                            )
+                            else:
+                                # caso único (ex: escolha por unidade)
+                                for escolha_id in escolhas:
+                                    prod_escolha = Produto.objects.select_for_update().get(id=escolha_id)
+                                    if prod_escolha.quantidade < quantidade:
+                                        mensagens_erro.append(
+                                            f'Produto "{prod_escolha.nome}" não tem estoque suficiente. '
+                                            f'Disponível: {prod_escolha.quantidade}, necessário: {quantidade}'
+                                        )
+
                     else:
                         if produto.quantidade < quantidade:
                             mensagens_erro.append(
@@ -240,12 +278,34 @@ class PagCliente(ListView):
 
                     produto = Produto.objects.get(id=produto_id)
 
-                    ItemPedido.objects.create(
-                        pedido=pedido,
-                        produto=produto,
-                        quantidade=quantidade,
-                        escolhas_combo=escolhas or None
-                    )
+                    if hasattr(produto, "combo") and produto.combo.tipo in ["opcional", "fixo_opcional"]:
+                        # trata combos com escolhas (tanto 'opcional' quanto 'fixo_opcional')
+                        if isinstance(escolhas, list) and any(isinstance(e, list) for e in escolhas):
+                            for grupo in escolhas:
+                                ItemPedido.objects.create(
+                                    pedido=pedido,
+                                    produto=produto,
+                                    quantidade=1,
+                                    escolhas_combo=grupo
+                                )
+                        else:
+                            # se o usuário escolheu N unidades (quantidade) e forneceu uma lista de escolhas
+                            for _ in range(quantidade):
+                                ItemPedido.objects.create(
+                                    pedido=pedido,
+                                    produto=produto,
+                                    quantidade=1,
+                                    escolhas_combo=escolhas or None
+                                )
+                    else:
+                        ItemPedido.objects.create(
+                            pedido=pedido,
+                            produto=produto,
+                            quantidade=quantidade,
+                            escolhas_combo=escolhas or None
+                        )
+
+
 
             return JsonResponse({"status": "ok", "pedido_id": pedido.id})
 
@@ -309,30 +369,50 @@ class PagFinalCliente(TemplateView):
             produto = item.produto
             quantidade = item.quantidade
             nome_base = produto.nome
+            combo = getattr(produto, 'combo', None)
 
-            if hasattr(produto, 'combo'):
-                combo = produto.combo
+            # Combos do tipo 'fixo' (todos os itens fixos listados)
+            if combo and combo.tipo == 'fixo':
+                nomes_itens_combo = [i.produto.nome for i in combo.itens.all()]
+                descricao = f"{nome_base} ({', '.join(nomes_itens_combo)})"
+                itens_processados.append({
+                    'quantidade': quantidade,
+                    'descricao': descricao
+                })
 
-                if combo.tipo == 'fixo':
-                    nomes_itens_combo = [i.produto.nome for i in combo.itens.all()]
-                    descricao = f"{nome_base} ({', '.join(nomes_itens_combo)})"
-                    itens_processados.append({
-                        'quantidade': quantidade,
-                        'descricao': descricao
-                    })
+            # Combos que possuem opções: tanto 'opcional' quanto 'fixo_opcional'
+            elif combo and combo.tipo in ['opcional', 'fixo_opcional']:
+                nomes_fixos = [i.produto.nome for i in combo.itens.all()]
+                escolhas_ids = item.escolhas_combo or []
 
-                elif combo.tipo == 'opcional':
-                    nomes_fixos = [i.produto.nome for i in combo.itens.all()]
-                    escolhas_ids = item.escolhas_combo or []
+                # Normaliza escolhas_ids para lista de ints (suporta tanto ["1","2"] quanto [1,2])
+                try:
+                    escolhas_ids = [int(e) for e in escolhas_ids] if escolhas_ids else []
+                except Exception:
+                    escolhas_ids = []
 
-                    # Verifica quantas categorias de escolha esse combo tem
-                    categorias_das_escolhas = list(
-                        Produto.objects.filter(id__in=escolhas_ids).values_list('categoria', flat=True)
-                    )
-                    categorias_unicas = set(categorias_das_escolhas)
+                # pega categorias das escolhas (para checar se há várias categorias)
+                categorias_das_escolhas = list(
+                    Produto.objects.filter(id__in=escolhas_ids).values_list('categoria', flat=True)
+                )
+                categorias_unicas = set(categorias_das_escolhas)
 
-                    # Se mais de uma categoria, separar individualmente
-                    if len(categorias_unicas) > 1:
+                if categorias_unicas and len(categorias_unicas) > 1:
+                    # Mais de uma categoria: cada escolha representa 1 unidade do combo (ex: 2 combos)
+                    for escolha_id in escolhas_ids:
+                        nome_escolha = Produto.objects.filter(id=escolha_id).values_list('nome', flat=True).first()
+                        nomes = nomes_fixos.copy()
+                        if nome_escolha:
+                            nomes.append(nome_escolha)
+                        descricao = f"{nome_base} ({', '.join(nomes)})"
+                        itens_processados.append({
+                            'quantidade': 1,
+                            'descricao': descricao
+                        })
+                else:
+                    # Mesma categoria ou nenhuma categoria (fallback)
+                    # Se cada escolha corresponde a uma unidade: listar individualmente
+                    if escolhas_ids and len(escolhas_ids) == quantidade:
                         for escolha_id in escolhas_ids:
                             nome_escolha = Produto.objects.filter(id=escolha_id).values_list('nome', flat=True).first()
                             nomes = nomes_fixos.copy()
@@ -344,35 +424,23 @@ class PagFinalCliente(TemplateView):
                                 'descricao': descricao
                             })
                     else:
-                        # Combo opcional com apenas uma categoria: normal
-                        if len(escolhas_ids) == quantidade:
-                            for escolha_id in escolhas_ids:
-                                nome_escolha = Produto.objects.filter(id=escolha_id).values_list('nome', flat=True).first()
-                                nomes = nomes_fixos.copy()
-                                if nome_escolha:
-                                    nomes.append(nome_escolha)
-                                descricao = f"{nome_base} ({', '.join(nomes)})"
-                                itens_processados.append({
-                                    'quantidade': 1,
-                                    'descricao': descricao
-                                })
-                        else:
-                            # fallback agrupado
-                            nomes_escolhas = list(Produto.objects.filter(id__in=escolhas_ids).values_list('nome', flat=True))
-                            nomes = nomes_fixos + nomes_escolhas
-                            descricao = f"{nome_base} ({', '.join(nomes)})"
-                            itens_processados.append({
-                                'quantidade': quantidade,
-                                'descricao': descricao
-                            })
+                        # fallback agrupado: mostra quantidade X do combo e lista as escolhas concatenadas
+                        nomes_escolhas = list(Produto.objects.filter(id__in=escolhas_ids).values_list('nome', flat=True))
+                        nomes = nomes_fixos + nomes_escolhas
+                        descricao = f"{nome_base} ({', '.join(nomes)})" if nomes else f"{nome_base}"
+                        itens_processados.append({
+                            'quantidade': quantidade,
+                            'descricao': descricao
+                        })
 
             else:
-                # Produto comum
+                # Produto comum (não é combo)
                 descricao = nome_base
                 itens_processados.append({
                     'quantidade': quantidade,
                     'descricao': descricao
                 })
+
 
         context["itens_processados"] = itens_processados
         return context

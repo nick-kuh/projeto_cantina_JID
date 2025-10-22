@@ -30,8 +30,9 @@ class Combo(models.Model):
     TIPO_COMBO = [
         ('fixo', 'Fixo'),
         ('opcional', 'Com opções'),
+        ('fixo_opcional', 'Fixo + opções')
     ]
-    tipo = models.CharField(max_length=10, choices=TIPO_COMBO, default='fixo')
+    tipo = models.CharField(max_length=15, choices=TIPO_COMBO, default='fixo')
 
     def __str__(self):
         return f"{self.produto_ptr.nome} ({self.get_tipo_display()})"
@@ -47,26 +48,43 @@ class Combo(models.Model):
     @property
     def descricao_resumida(self):
         partes = []
-
-        # Produtos fixos no combo
         for item in self.itens.all():
             partes.append(f"{item.produto.nome}")
 
-        # Opções para o cliente escolher
-        for opcao in self.opcoes.all():
-            partes.append(f"escolha alguma opção de {opcao.get_categoria_display()}")
+        if self.tipo in ['opcional', 'fixo_opcional']:
+            for opcao in self.opcoes.all():
+                partes.append(f"escolha alguma opção de {opcao.get_categoria_display()}")
 
         return ", ".join(partes)
+
     
     def disponivel(self, quantidade=1):
         """
         Verifica se é possível montar este combo na quantidade desejada.
+        - 'fixo': todos os produtos fixos precisam ter estoque suficiente
+        - 'opcional': deve existir pelo menos um produto disponível por categoria opcional
+        - 'fixo_opcional': precisa dos fixos + pelo menos uma opção disponível
         """
+        # 🔹 1. Verifica os produtos fixos
         for item in self.itens.all():
             necessario = quantidade * item.quantidade
             if item.produto.quantidade < necessario:
                 return False
+
+        # 🔹 2. Verifica as opções (para tipos com opcionais)
+        if self.tipo in ['opcional', 'fixo_opcional']:
+            for opcao in self.opcoes.all():
+                # procura produtos disponíveis dessa categoria
+                tem_disponivel = Produto.objects.filter(
+                    categoria=opcao.categoria,
+                    quantidade__gte=1
+                ).exclude(id__in=[i.produto.id for i in self.itens.all()])  # não contar produtos fixos
+                if not tem_disponivel.exists():
+                    return False
+
         return True
+
+
     
 
 class ItemCombo(models.Model):
@@ -149,16 +167,31 @@ class ItemPedido(models.Model):
         return f"{self.quantidade}x {self.produto.nome} -> {self.pedido.cliente}"
 
     def save(self, *args, **kwargs):
-        if self.pk:
+        # ⚙️ Garante que o pedido exista
+        if not self.pedido_id:
+            raise ValueError("O pedido precisa estar salvo antes de adicionar itens.")
+
+        # ⚙️ Calcula diferença de quantidade (ex: aumento/diminuição)
+        if not self.pk:
+            diferenca = self.quantidade
+        else:
             item_antigo = ItemPedido.objects.get(pk=self.pk)
             diferenca = self.quantidade - item_antigo.quantidade
-        else:
-            diferenca = self.quantidade
 
         combo = getattr(self.produto, 'combo', None)
 
-        if combo:
-            # 🔹 Sempre processa os itens fixos primeiro
+        # ⚙️ Produtos normais
+        if not combo:
+            if diferenca > 0:
+                if self.produto.quantidade < diferenca:
+                    raise ValueError(f"Estoque insuficiente para {self.produto.nome}")
+                self.produto.quantidade -= diferenca
+            elif diferenca < 0:
+                self.produto.quantidade += abs(diferenca)
+            self.produto.save()
+
+        # ⚙️ Combos (fixo, opcional e híbrido)
+        else:
             for item_combo in combo.itens.all():
                 produto_estoque = item_combo.produto
                 total_a_abater = item_combo.quantidade * diferenca
@@ -175,42 +208,26 @@ class ItemPedido(models.Model):
 
                 produto_estoque.save()
 
-            # 🔹 Depois processa os opcionais (se houver)
-            if combo.tipo == 'opcional' and self.escolhas_combo:
-                escolhas_ids = [int(eid) for eid in (self.escolhas_combo or [])]
+            # 🔹 Para combos opcionais ou híbridos
+            if combo.tipo in ['opcional', 'fixo_opcional'] and self.escolhas_combo:
+                escolhas_ids = [int(eid) for eid in self.escolhas_combo]
                 for escolha_id in escolhas_ids:
                     produto_escolha = Produto.objects.get(id=escolha_id)
-
                     if diferenca > 0:
                         if produto_escolha.quantidade < diferenca:
                             raise ValueError(f"Estoque insuficiente para {produto_escolha.nome}")
                         produto_escolha.quantidade -= diferenca
                     elif diferenca < 0:
                         produto_escolha.quantidade += abs(diferenca)
-
                     produto_escolha.save()
 
-        else:
-            # Produto normal
-            if diferenca > 0:
-                if self.produto.quantidade < diferenca:
-                    raise ValueError(f"Estoque insuficiente para {self.produto.nome}")
-                self.produto.quantidade -= diferenca
-            elif diferenca < 0:
-                self.produto.quantidade += abs(diferenca)
-            self.produto.save()
-
+        # ⚙️ Salva e atualiza o total
         super().save(*args, **kwargs)
         self.pedido.atualizar_total()
 
 
 
-
     def delete(self, *args, **kwargs):
-        # self.produto.quantidade += self.quantidade  # Devolve a quantidade ao estoque ao excluir
-        # self.produto.save()
-        # super().delete(*args, **kwargs)  # Remove o item primeiro
-        # self.pedido.atualizar_total()  # Atualiza o total do pedido após excluir o item
         if hasattr(self.produto, 'combo') and self.produto.combo.tipo == 'fixo':
             combo = self.produto.combo
             for item_combo in combo.itens.all():
